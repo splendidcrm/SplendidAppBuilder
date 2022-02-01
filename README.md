@@ -53,8 +53,8 @@ When we display the value in a read-only mode, we start with the USDOLLAR and co
 Sample usage:
 
 > let dConvertedValue = C10n.ToCurrency(Sql.ToDecimal(DATA_VALUE));
-DATA_VALUE   = formatCurrency(dConvertedValue, oNumberFormat);
-DISPLAY_NAME = DATA_FORMAT.replace('{0:c}', DATA_VALUE);
+> DATA_VALUE   = formatCurrency(dConvertedValue, oNumberFormat);
+> DISPLAY_NAME = DATA_FORMAT.replace('{0:c}', DATA_VALUE);
 
 
 ### Access Rights
@@ -73,7 +73,7 @@ When the require_user_assignment config flag is enabled, it forces the user to s
 ![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Access_Rights_Assigned_To.gif)
 
 >  where 1 = 1
-   and (ASSIGNED_USER_ID is null or ASSIGNED_USER_ID = '00000000-0000-0000-0000-000000000002')
+>   and (ASSIGNED_USER_ID is null or ASSIGNED_USER_ID = '00000000-0000-0000-0000-000000000002')
 
 #### Team Assignment
 When team management is enabled using the enable_team_management flag, records can be assigned to a team. Then, any user that is also assigned to that team will be able to see the record. Team assignment does not determine if the record can be edited, it just determines if the user has access to the record.
@@ -82,14 +82,14 @@ When team management is enabled using the enable_team_management flag, records c
 Teams can be configured to be required or optional using the require_team_management config flag. When teams are required, we use an inner join to determine if record is visible.
 
 >        inner join vwTEAM_MEMBERSHIPS
->               on vwTEAM_MEMBERSHIPS.MEMBERSHIP_TEAM_ID = TEAM_ID
->              and vwTEAM_MEMBERSHIPS.MEMBERSHIP_USER_ID = '00000000-0000-0000-0000-000000000002'
+>                on vwTEAM_MEMBERSHIPS.MEMBERSHIP_TEAM_ID = TEAM_ID
+>               and vwTEAM_MEMBERSHIPS.MEMBERSHIP_USER_ID = '00000000-0000-0000-0000-000000000002'
 
 When team assignement is not required, we use an outer join. This makes the team field informational as it will not restrict access.
 
 >   left outer join vwTEAM_MEMBERSHIPS
->               on vwTEAM_MEMBERSHIPS.MEMBERSHIP_TEAM_ID = TEAM_ID
->              and vwTEAM_MEMBERSHIPS.MEMBERSHIP_USER_ID = '00000000-0000-0000-0000-000000000002'
+>                on vwTEAM_MEMBERSHIPS.MEMBERSHIP_TEAM_ID = TEAM_ID
+>               and vwTEAM_MEMBERSHIPS.MEMBERSHIP_USER_ID = '00000000-0000-0000-0000-000000000002'
 
 ### Runtime Customizations
 An enterprise needs to be able to customize at design time as well as run time.
