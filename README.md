@@ -33,6 +33,7 @@ We have two tables that we use to manage the display of labels in the user's per
 The LANGUAGES table is simply a list of possible languages that can be enabled.
 The TERMINOLOGY table contains all the labels and text for all modules and all supported languages. This table typically has 3000 terms per language. We only ship with english, so you will need to either import any other required language packs or define all the terms yourself for your desired language. Even a list, such as High, Medium, Low, would be represented in the TERMINOLOGY table for each supported language.
 ![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Localization_Terminology_Table.gif)
+
 ![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Localization_Terminology_Example.gif)
 
 #### Date/Time and Time Zone
@@ -50,6 +51,7 @@ When we display the value in a read-only mode, we start with the USDOLLAR and co
 ![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Localization_Opportunities_Table.gif)
 
 Sample usage:
+
 > let dConvertedValue = C10n.ToCurrency(Sql.ToDecimal(DATA_VALUE));
 DATA_VALUE   = formatCurrency(dConvertedValue, oNumberFormat);
 DISPLAY_NAME = DATA_FORMAT.replace('{0:c}', DATA_VALUE);
@@ -78,11 +80,13 @@ When team management is enabled using the enable_team_management flag, records c
 ![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Access_Rights_Team.gif)
 
 Teams can be configured to be required or optional using the require_team_management config flag. When teams are required, we use an inner join to determine if record is visible.
+
 >        inner join vwTEAM_MEMBERSHIPS
                on vwTEAM_MEMBERSHIPS.MEMBERSHIP_TEAM_ID = TEAM_ID
               and vwTEAM_MEMBERSHIPS.MEMBERSHIP_USER_ID = '00000000-0000-0000-0000-000000000002'
 
 When team assignement is not required, we use an outer join. This makes the team field informational as it will not restrict access.
+
 >   left outer join vwTEAM_MEMBERSHIPS
                on vwTEAM_MEMBERSHIPS.MEMBERSHIP_TEAM_ID = TEAM_ID
               and vwTEAM_MEMBERSHIPS.MEMBERSHIP_USER_ID = '00000000-0000-0000-0000-000000000002'
@@ -93,9 +97,12 @@ An enterprise needs to be able to customize at design time as well as run time.
 #### Custom Modules
 When you create a custom module, a database table is created.
 ![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Runtime_Customizations_Module_Builder.gif)
+
 You can later add custom fields to this table.
 ![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Runtime_Customizations_Custom_Field.gif)
+
 #### Custom Layouts
+
 There are three types of layouts, EditView, DetailView and ListView. EditView is for editing, DetailView is read-only view that typically includes relationship panels, and ListView is a searchable list.
 ![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Runtime_Customizations_Layout_EditView.gif)
 
@@ -104,6 +111,7 @@ Code that is loaded at runtime can either come from the REACT_CUSTOM_VIEWS datab
 When using the CustomViewsJS approach, the folder tree is important. The Module name is at the top of the tree, with nodes for DetailViews, EditViews, ListViews and SubPanels.
 A quick way to get started is to create the nodes for the module, then copy DetailView.tsx, EditView.tsx or ListView.tsx from the Views folder into the appropriate custom view folder. The imports in the file will be ignored.
 ![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Runtime_Customizations_Layout_REACT_CUSTOM_VIEWS.gif)
+
 ![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Runtime_Customizations_Layout_CustomViewsJS.gif)
 
 ### Server and Mobile
@@ -128,12 +136,15 @@ An enterprise needs to manage more than just tables in a database. They typicall
 
 #### SQL Functions, Stored Procedures and Views
 An enterprise application typically needs to deal with lots of data and lost of users. This means that the system needs to be designed to be as fast as possible. There is no faster way than to use SQL views to return as much data as possible in a single request. When updating the database, using a SQL stored procedure is the most effecient approach.
+![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Database_Management_SQL_Scripts_SplendidApp.gif)
 
-
-![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Database_Management_SQL_Scripts_SplendidApp.gif)#### Building and Updating the Database
+#### Building and Updating the Database
 A key to the design of the Splendid system is the way we build our SQL scripts into a single file. The goal is to have a single SQL file that will create an empty database or upgrade an existing database from any previous version to the current version. There is nothing worse than an upgrade path that requires you to apply 7 separate upgrades in sequence to bring the product up to the current level. As we have proven, all it takes is a smart design.
 Our solution is to separate the SQL objects by type, then using a file name numbering scheme to combine all the files into a single Build.sql file. The files within each folder are numbered 0 through 9. For example, the following creates a single View.sql file with all the views.
+
 > copy /b Views\*.0.sql + Views\*.1.sql + Views\*.2.sql + Views\*.3.sql + Views\*.4.sql + Views\*.5.sql + Views\*.6.sql + Views\*.7.sql + Views\*.8.sql + Views\*.9.sql Views.sql
+
 Once we have all the files for each seet of SQL objects combined into their respective files, we combine all of those into a single Build.sql
+
 > copy /b ProceduresDDL.sql + BaseTables.sql + Tables.sql + Functions.sql + ViewsDDL.sql + Views.sql + Procedures.sql + Data.sql + Terminology.sql Build.sql
 
