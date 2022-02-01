@@ -136,6 +136,7 @@ An enterprise needs to manage more than just tables in a database. They typicall
 
 #### SQL Functions, Stored Procedures and Views
 An enterprise application typically needs to deal with lots of data and lost of users. This means that the system needs to be designed to be as fast as possible. There is no faster way than to use SQL views to return as much data as possible in a single request. When updating the database, using a SQL stored procedure is the most effecient approach.
+
 ![](http://www.splendidcrm.com/portals/0/SplendidAppBuilder/Database_Management_SQL_Scripts_SplendidApp.gif)
 
 #### Building and Updating the Database
