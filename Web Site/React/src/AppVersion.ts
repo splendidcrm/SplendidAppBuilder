@@ -8,7 +8,7 @@
  * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
  */
 
-export const AppName = 'SplendidCRM';
-export const AppVersion = '1.0.22031';
+export const AppName = 'Splendid App';
+export const AppVersion = '1.0.22035';
 
 
