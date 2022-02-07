@@ -7,7 +7,7 @@ set nocount on;
 GO
 
 -- delete from DYNAMIC_BUTTONS where VIEW_NAME = 'ModuleBuilder.WizardView';
-if not exists(select * from DYNAMIC_BUTTONS where VIEW_NAME = 'ModuleBuilder.WizardView' and DELETED = 0) begin -- then
+if not exists(select * from DYNAMIC_BUTTONS where VIEW_NAME = 'ModuleBuilder.WizardView' and COMMAND_NAME = 'Generate' and DELETED = 0) begin -- then
 	print 'DYNAMIC_BUTTONS ModuleBuilder.WizardView';
 	exec dbo.spDYNAMIC_BUTTONS_InsButton 'ModuleBuilder.WizardView'  , 0, 'ModuleBuilder'   , 'edit', null, null, 'Back'    , null, '.LBL_BACK_BUTTON_LABEL'                 , '.LBL_BACK_BUTTON_LABEL'                 , null, null, null;
 	exec dbo.spDYNAMIC_BUTTONS_InsButton 'ModuleBuilder.WizardView'  , 1, 'ModuleBuilder'   , 'edit', null, null, 'Next'    , null, '.LBL_NEXT_BUTTON_LABEL'                 , '.LBL_NEXT_BUTTON_LABEL'                 , null, null, null;
