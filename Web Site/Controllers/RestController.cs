@@ -1924,7 +1924,8 @@ namespace SplendidWebApi.Controllers
 		// Incoming message for operation 'CreateRecord' (contract 'AddressService' with namespace 'http://tempuri.org/') contains an unrecognized http body format value 'Json'. 
 		// The expected body format value is 'Raw'. This can be because a WebContentTypeMapper has not been configured on the binding. See the documentation of WebContentTypeMapper for more details.
 		//xhr.setRequestHeader('content-type', 'application/octet-stream');
-		public Guid UpdateModuleTable([FromBody] Dictionary<string, object> dict)
+		// 02/07/2022 Paul.  Must follow old convention of returning value under d.  { d: value }
+		public Dictionary<string, object> UpdateModuleTable([FromBody] Dictionary<string, object> dict)
 		{
 			string sTableName = Sql.ToString(Request.Query["TableName"]);
 			if ( Sql.IsEmptyString(sTableName) )
@@ -1950,11 +1951,14 @@ namespace SplendidWebApi.Controllers
 			
 			// 04/01/2020 Paul.  Move UpdateTable to RestUtil. 
 			Guid gID = RestUtil.UpdateTable(sTableName, dict);
-			return gID;
+			Dictionary<string, object> d = new Dictionary<string, object>();
+			d.Add("d", gID.ToString());
+			return d;
 		}
 
 		[HttpPost("[action]")]
-		public Guid UpdateModule([FromBody] Dictionary<string, object> dict)
+		// 02/07/2022 Paul.  Must follow old convention of returning value under d.  { d: value }
+		public Dictionary<string, object> UpdateModule([FromBody] Dictionary<string, object> dict)
 		{
 			string sModuleName = Sql.ToString(Request.Query["ModuleName"]);
 			if ( Sql.IsEmptyString(sModuleName) )
@@ -1999,7 +2003,9 @@ namespace SplendidWebApi.Controllers
 					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
 				}
 			}
-			return gID;
+			Dictionary<string, object> d = new Dictionary<string, object>();
+			d.Add("d", gID.ToString());
+			return d;
 		}
 
 		// 04/01/2020 Paul.  Move UpdateTable to RestUtil. 
@@ -3244,7 +3250,7 @@ namespace SplendidWebApi.Controllers
 
 		// 01/24/2021 Paul.  Allow SendEmail from React Client. 
 		[HttpPost("[action]")]
-		public string SendEmail(Guid ID)
+		public Dictionary<string, object> SendEmail(Guid ID)
 		{
 			string ModuleName = "Emails";
 			if ( Sql.IsEmptyString(ModuleName) )
@@ -3344,7 +3350,9 @@ namespace SplendidWebApi.Controllers
 					}
 				}
 			}
-			return sSTATUS;
+			Dictionary<string, object> d = new Dictionary<string, object>();
+			d.Add("d", sSTATUS);
+			return d;
 		}
 #endif
 
@@ -3675,7 +3683,8 @@ namespace SplendidWebApi.Controllers
 
 		// 05/08/2019 Paul.  The React client will need to update the saved search of each module. 
 		[HttpPost("[action]")]
-		public Guid UpdateSavedSearch(Dictionary<string, object> dict)
+		// 02/07/2022 Paul.  Must follow old convention of returning value under d.  { d: value }
+		public Dictionary<string, object> UpdateSavedSearch(Dictionary<string, object> dict)
 		{
 			Guid gID = Guid.Empty;
 			//try
@@ -3703,7 +3712,9 @@ namespace SplendidWebApi.Controllers
 				// 02/04/2007 Paul.  Don't catch the exception.  
 				// It is a web service, so the exception will be handled properly by the AJAX framework. 
 			}
-			return gID;
+			Dictionary<string, object> d = new Dictionary<string, object>();
+			d.Add("d", gID.ToString());
+			return d;
 		}
 
 		public class DeleteSavedSearchParameters

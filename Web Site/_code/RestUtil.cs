@@ -1193,7 +1193,8 @@ namespace SplendidCRM
 									{
 										arrSELECT.Add("FAVORITE_RECORD_ID"    );
 									}
-									if ( !Sql.ToBoolean(Application["CONFIG.disable_Following"]) && Sql.ToBoolean(Application["CONFIG.enable_activity_streams"]) && Sql.ToBoolean(Application["Modules." + sMODULE_NAME + ".StreamEnabled"]) )
+									// 02/07/2022 Paul.  Correct case of disable_following. 
+									if ( !Sql.ToBoolean(Application["CONFIG.disable_following"]) && Sql.ToBoolean(Application["CONFIG.enable_activity_streams"]) && Sql.ToBoolean(Application["Modules." + sMODULE_NAME + ".StreamEnabled"]) )
 									{
 										arrSELECT.Add("SUBSCRIPTION_PARENT_ID");
 									}
@@ -1269,7 +1270,8 @@ namespace SplendidCRM
 											{
 												sSQL += "     , FAVORITE_RECORD_ID" + ControlChars.CrLf;
 											}
-											if ( !Sql.ToBoolean(Application["CONFIG.disable_Following"]) && Sql.ToBoolean(Application["CONFIG.enable_activity_streams"]) && Sql.ToBoolean(Application["Modules." + sMODULE_NAME + ".StreamEnabled"]) )
+											// 02/07/2022 Paul.  Correct case of disable_following. 
+											if ( !Sql.ToBoolean(Application["CONFIG.disable_following"]) && Sql.ToBoolean(Application["CONFIG.enable_activity_streams"]) && Sql.ToBoolean(Application["Modules." + sMODULE_NAME + ".StreamEnabled"]) )
 											{
 												sSQL += "     , SUBSCRIPTION_PARENT_ID" + ControlChars.CrLf;
 											}
@@ -1449,7 +1451,8 @@ namespace SplendidCRM
 												cmd.CommandText += "              and vwSUGARFAVORITES.FAVORITE_USER_ID   = @FAVORITE_USER_ID" + ControlChars.CrLf;
 												Sql.AddParameter(cmd, "@FAVORITE_USER_ID", Security.USER_ID);
 											}
-											if ( !Sql.ToBoolean(Application["CONFIG.disable_Following"]) && Sql.ToBoolean(Application["CONFIG.enable_activity_streams"]) && Sql.ToBoolean(Application["Modules." + sMODULE_NAME + ".StreamEnabled"]) )
+											// 02/07/2022 Paul.  Correct case of disable_following. 
+											if ( !Sql.ToBoolean(Application["CONFIG.disable_following"]) && Sql.ToBoolean(Application["CONFIG.enable_activity_streams"]) && Sql.ToBoolean(Application["Modules." + sMODULE_NAME + ".StreamEnabled"]) )
 											{
 												cmd.CommandText += "  left outer join vwSUBSCRIPTIONS                                               " + ControlChars.CrLf;
 												cmd.CommandText += "               on vwSUBSCRIPTIONS.SUBSCRIPTION_PARENT_ID = ID                   " + ControlChars.CrLf;

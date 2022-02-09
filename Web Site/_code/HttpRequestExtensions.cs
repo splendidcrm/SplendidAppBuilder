@@ -47,6 +47,67 @@ namespace SplendidApp
 			return false;
 		}
 
+		private System.Collections.ArrayList ConvertToArray(JsonElement json)
+		{
+			System.Collections.ArrayList array = new System.Collections.ArrayList();
+			JsonElement.ArrayEnumerator arrenum = json.EnumerateArray();
+			while ( arrenum.MoveNext() )
+			{
+				switch ( arrenum.Current.ValueKind )
+				{
+					case JsonValueKind.Null  :  array.Add(null );  break;
+					case JsonValueKind.False :  array.Add(false);  break;
+					case JsonValueKind.True  :  array.Add(true );  break;
+					case JsonValueKind.String:  array.Add(SplendidCRM.Sql.ToString(arrenum.Current.GetString()));  break;
+					// 02/07/2022 Paul.  Convert number to string so that we don't have issues converting float to int. 
+					case JsonValueKind.Number:  array.Add(SplendidCRM.Sql.ToString(arrenum.Current.GetString()));  break;
+					case JsonValueKind.Object:
+					{
+						array.Add(ConvertToDictionary(arrenum.Current));
+						break;
+					}
+					case JsonValueKind.Array :
+					{
+						// 02/07/2022 Paul.  Convert JsonElement to ArrayList to leverage existing SplendidCRM code. 
+						array.Add(ConvertToArray(arrenum.Current));
+						break;
+					}
+				}
+			}
+			return array;
+		}
+
+		private Dictionary<string, object> ConvertToDictionary(JsonElement json)
+		{
+			Dictionary<string, object> dict = new Dictionary<string, object>();
+			JsonElement.ObjectEnumerator objenum = json.EnumerateObject();
+			while ( objenum.MoveNext() )
+			{
+				string sName = objenum.Current.Name;
+				switch ( objenum.Current.Value.ValueKind )
+				{
+					case JsonValueKind.Null  :  dict[sName] = null ;  break;
+					case JsonValueKind.False :  dict[sName] = false;  break;
+					case JsonValueKind.True  :  dict[sName] = true ;  break;
+					case JsonValueKind.String:  dict[sName] = SplendidCRM.Sql.ToString(objenum.Current.Value);  break;
+					// 02/07/2022 Paul.  Convert number to string so that we don't have issues converting float to int. 
+					case JsonValueKind.Number:  dict[sName] = SplendidCRM.Sql.ToString(objenum.Current.Value);  break;
+					case JsonValueKind.Object:
+					{
+						dict[sName] = ConvertToDictionary(objenum.Current.Value);
+						break;
+					}
+					case JsonValueKind.Array :
+					{
+						// 02/07/2022 Paul.  Convert JsonElement to ArrayList to leverage existing SplendidCRM code. 
+						dict[sName] = ConvertToArray(objenum.Current.Value);
+						break;
+					}
+				}
+			}
+			return dict;
+		}
+
 		public override async Task<InputFormatterResult> ReadRequestBodyAsync(InputFormatterContext context)
 		{
 			HttpRequest request = context.HttpContext.Request;
@@ -58,7 +119,9 @@ namespace SplendidApp
 				{
 					await request.Body.CopyToAsync(ms);
 					byte[] content = ms.ToArray();
-					Dictionary<string, object> obj = JsonSerializer.Deserialize<Dictionary<string, object>>(content);
+					JsonDocument jDoc = System.Text.Json.JsonDocument.Parse(content);
+					// 02/07/2022 Paul.  Convert JsonDocument to Dictionary to leverage existing SplendidCRM code. 
+					Dictionary<string, object> obj = ConvertToDictionary(jDoc.RootElement);
 					return await InputFormatterResult.SuccessAsync(obj);
 				}
 			}
@@ -66,4 +129,5 @@ namespace SplendidApp
 		}
 	}
 }
+
 

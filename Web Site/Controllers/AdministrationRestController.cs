@@ -4000,7 +4000,8 @@ namespace SplendidWebApi.Controllers
 		}
 
 		[HttpPost("[action]")]
-		public Guid UpdateAdminModule([FromBody] Dictionary<string, object> dict)
+		// 02/07/2022 Paul.  Must follow old convention of returning value under d.  { d: value }
+		public Dictionary<string, object> UpdateAdminModule([FromBody] Dictionary<string, object> dict)
 		{
 			try
 			{
@@ -4018,7 +4019,9 @@ namespace SplendidWebApi.Controllers
 					{
 						PreprocessAdminData(sTableName, dict);
 						Guid gID = UpdateAdminTable(sModuleName, sTableName, dict);
-						return gID;
+						Dictionary<string, object> d = new Dictionary<string, object>();
+						d.Add("d", gID.ToString());
+						return d;
 					}
 					else
 					{
@@ -5273,7 +5276,8 @@ namespace SplendidWebApi.Controllers
 		}
 
 		[HttpPost("[action]")]
-		public Guid UpdateAclAccess([FromBody] Dictionary<string, object> dict)
+		// 02/07/2022 Paul.  Must follow old convention of returning value under d.  { d: value }
+		public Dictionary<string, object> UpdateAclAccess([FromBody] Dictionary<string, object> dict)
 		{
 			Guid gID = Guid.Empty;
 			try
@@ -5566,7 +5570,9 @@ namespace SplendidWebApi.Controllers
 				SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
 				throw;
 			}
-			return gID;
+			Dictionary<string, object> d = new Dictionary<string, object>();
+			d.Add("d", gID.ToString());
+			return d;
 		}
 
 		[HttpGet("[action]")]

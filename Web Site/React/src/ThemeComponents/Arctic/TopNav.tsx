@@ -1018,7 +1018,7 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 
 	public render()
 	{
-		const { tabMenus, bIsAuthenticated, txtQuickSearch, nMaxTabs, showInlineEdit, item, error, QUICK_CREATE_MODULE, activeModule, actionsModule, showUnifiedSearch, unifiedSearchItems, showQuickCreate, menuChangeKey } = this.state;
+		const { bIsAuthenticated, txtQuickSearch, nMaxTabs, showInlineEdit, item, error, QUICK_CREATE_MODULE, activeModule, actionsModule, showUnifiedSearch, unifiedSearchItems, showQuickCreate, menuChangeKey } = this.state;
 	
 		//03/06/2019. Chase. Referencing ADMIN_MODE triggers re-renders when it's updated;
 		Credentials.ADMIN_MODE;
@@ -1029,9 +1029,20 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 		// 04/24/2021 Paul.  Must compute the tabs during render as the last tab may need to be replaced with the active tab. 
 		this.tabsPrimary   = [];
 		this.tabsSecondary = [];
-		if ( SplendidCache.IsInitialized && bIsAuthenticated && !bLoading && tabMenus != null )
+		if ( SplendidCache.IsInitialized && bIsAuthenticated && !bLoading && SplendidCache.TAB_MENU != null )
 		{
-			this.tabsPrimary = tabMenus;
+			// 02/08/2022 Paul.  We need to start from the cache so that updated menus get applied immediately. 
+			let tabMenus: TAB_MENU[] = [];
+			for ( let nTab = 0; nTab < SplendidCache.TAB_MENU.length; nTab++ )
+			{
+				var sMODULE_NAME = SplendidCache.TAB_MENU[nTab].MODULE_NAME;
+				if ( sMODULE_NAME != 'Home' )
+				{
+					tabMenus.push(SplendidCache.TAB_MENU[nTab]);
+				}
+			}
+			// 02/08/2022 Paul.  We need to deep copy as we modify the when showing an active module. 
+			this.tabsPrimary = Sql.DeepCopy(tabMenus);
 			if ( tabMenus.length > nMaxTabs )
 			{
 				this.tabsPrimary   = tabMenus.slice(0, nMaxTabs);
@@ -1085,9 +1096,13 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 							EDIT_ACLACCESS: SplendidCache.GetUserAccess(module.MODULE_NAME, 'edit'),
 							EDIT_LABEL    : null,
 						};
-						if ( this.tabsPrimary.length > 0 )
+						// 02/08/2022 Paul.  We only need to overflow if showing max tabs. 
+						if ( this.tabsPrimary.length >= nMaxTabs )
 						{
-							this.tabsSecondary.unshift(this.tabsPrimary.pop());
+							if ( this.tabsPrimary.length > 0 )
+							{
+								this.tabsSecondary.unshift(this.tabsPrimary.pop());
+							}
 						}
 						this.tabsPrimary.push(activeMenu);
 					}
@@ -1096,6 +1111,11 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 		}
 		if ( SplendidCache.IsInitialized )
 		{
+			//console.log((new Date()).toISOString() + ' ' + this.constructor.name + '.render tabMenus'     , SplendidCache.TAB_MENU);
+			//console.log((new Date()).toISOString() + ' ' + this.constructor.name + '.render tabsPrimary'  , this.tabsPrimary);
+			//console.log((new Date()).toISOString() + ' ' + this.constructor.name + '.render tabsSecondary', this.tabsSecondary);
+			//console.log((new Date()).toISOString() + ' ' + this.constructor.name + '.render activeModule' , activeModule);
+
 			// 04/16/2020 Paul.  Use logo from config. 
 			let sCompanyHomeImage: string = Crm_Config.ToString('header_home_image');
 			// 10/28/2021 Paul.  Allow logo to be stored in config table as base64. 
