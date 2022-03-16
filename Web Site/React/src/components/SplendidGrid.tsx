@@ -150,7 +150,8 @@ class SplendidGrid extends React.Component<ISplendidGridProps, ISplendidGridStat
 			if ( this._isMounted )
 			{
 				newState.error = null;
-				this.setState(newState as ISplendidGridState, resolve);
+				// 02/20/2022 Paul.  Latest version of TypeScript does not allow resolve to return undefined, so return null. 
+				this.setState(newState as ISplendidGridState, () => resolve(null) );
 			}
 		});
 	}
@@ -2345,4 +2346,3 @@ class SplendidGrid extends React.Component<ISplendidGridProps, ISplendidGridStat
 
 // 07/13/2019 Paul.  We don't want to use withRouter() as it makes it difficult to get a reference. 
 export default SplendidGrid;
-

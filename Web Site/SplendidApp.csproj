@@ -13,7 +13,7 @@
     <TypeScriptToolsVersion>Latest</TypeScriptToolsVersion>
     <IsPackable>false</IsPackable>
     <SpaRoot>React\</SpaRoot>
-    <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**;$(SpaRoot)platforms\**;$(SpaRoot)plugins\**</DefaultItemExcludes>
     <Company>SplendidCRM Software, Inc.</Company>
     <Copyright>Copyright (C) 2005-2022 SplendidCRM, Inc.  All rights reserved.</Copyright>
     <Authors>SplendidCRM Software, Inc.</Authors>
@@ -50,6 +50,8 @@
     <None Remove="$(SpaRoot)**" />
     <None Remove="React\**" />
     <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
+    <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)platforms\**" />
+    <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)pluginss\**" />
     <None Remove="_sgbak\**" />
     <None Remove="**\_sgbak\**" />
   </ItemGroup>

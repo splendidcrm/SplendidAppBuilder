@@ -675,8 +675,8 @@ namespace SplendidWebApi.Controllers
 					sb.AppendLine(TabSpace(nIndent) + "trn.Rollback();");
 					// 12/25/2008 Paul.  Re-throw the original exception so as to retain the call stack. 
 					// The difference between these two variations is subtle but important. With the first example, the higher level
-					// caller isnít going to get all the information about the original error. The call stack in the exception is replaced
-					// with a new call stack that originates at the ìthrow exî statement ñ which is not what we want to record. The
+					// caller isn‚Äôt going to get all the information about the original error. The call stack in the exception is replaced
+					// with a new call stack that originates at the ‚Äúthrow ex‚Äù statement ‚Äì which is not what we want to record. The
 					// second example is the only one that actually re-throws the original exception, preserving the stack trace where
 					// the original error occurred.
 					//sb.AppendLine(TabSpace(nIndent) + "throw(new Exception(ex.Message, ex.InnerException));");
@@ -2065,4 +2065,3 @@ namespace SplendidWebApi.Controllers
 
 	}
 }
-

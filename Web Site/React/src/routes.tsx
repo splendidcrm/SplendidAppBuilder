@@ -95,7 +95,7 @@ export const routes = (
 
 			<PrivateRoute exact path="/Administration/DynamicLayout/AdminDynamicLayout"          component={AdminDynamicLayout} />
 			<PrivateRoute exact path="/Administration/Terminology/RenameTabs"                    component={AdminRenameTabs} />
-			<PrivateRoute exact path="/Administration/Terminology/ConfigureTabs"                 component={AdminConfigureTabs} />
+			<PrivateRoute exact path="/Administration/Modules/ConfigureTabs"                     component={AdminConfigureTabs} />
 
 			<PrivateRoute       path="/Administration/SystemLog"                                 component={SystemLogListView} />
 			<PrivateRoute       path="/Administration/UserLogins"                                component={UserLoginsListView} />
@@ -133,4 +133,3 @@ export const routes = (
 		</Switch>
 	</App>
 );
-

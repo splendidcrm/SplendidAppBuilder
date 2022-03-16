@@ -141,6 +141,9 @@ class Precompile extends React.Component<IPrecompileProps, IPrecompileState>
 						{
 							continue;
 						}
+						// 02/11/2022 Paul.  ReportDesigner is converted to Reports in router, so we must do so here as well. 
+						if ( MODULE_NAME == 'ReportDesigner' )
+							MODULE_NAME = 'Reports';
 						let module: MODULE = lstMODULES[MODULE_NAME];
 						let RELATIVE_PATH: string = module.RELATIVE_PATH;
 						RELATIVE_PATH = RELATIVE_PATH.replace('~/', '');
@@ -649,4 +652,3 @@ class Precompile extends React.Component<IPrecompileProps, IPrecompileState>
 }
 
 export default withRouter(Precompile);
-

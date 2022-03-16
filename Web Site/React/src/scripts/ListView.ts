@@ -183,7 +183,8 @@ export async function ListView_ExportModule(sMODULE_NAME: string, sSORT_FIELD: s
 			else
 				url += item + '=' + encodeURIComponent(obj[item]);
 		}
-		window.open(url, 'SplendidExport', null, true);
+		// 02/20/2022 Paul.  Remove last parameter due to compiler error.  Not in W3C spec. 
+		window.open(url, 'SplendidExport', null);
 	}
 	else
 	{
@@ -395,5 +396,4 @@ export async function AutoComplete_ModuleMethod(sMODULE_NAME: string, sMETHOD: s
 	let json = await GetSplendidResult(res);
 	return (json.d);
 }
-
 

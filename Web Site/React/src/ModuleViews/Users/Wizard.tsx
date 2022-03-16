@@ -351,7 +351,11 @@ class UserWizard extends React.Component<IUserWizardProps, IUserWizardState>
 				case 'Skip':
 				{
 					// 10/30/2021 Paul.  If the user wants to skip, then we will not present the profile config again. 
-					row = {};
+					// 02/10/2022 Paul.  Must include the ID in the row for it to get used. 
+					row =
+					{
+						ID: Security.USER_ID()
+					};
 					row['TIMEZONE_ID'] = Credentials.sUSER_TIMEZONE_ID;
 					if ( Sql.IsEmptyString(row['TIMEZONE_ID']) )
 						row['TIMEZONE_ID'] = Crm_Config.ToString ('default_timezone');
