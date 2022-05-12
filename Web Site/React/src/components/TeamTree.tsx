@@ -148,7 +148,8 @@ class TeamTree extends React.Component<ITeamTreeProps, ITeamTreeState>
 		let userTheme   : string  = SplendidCache.UserTheme;
 		let themeURL    : string = Credentials.RemoteServer + 'App_Themes/' + userTheme + '/';
 		let toggleWidth : string = '8px';
-		if ( userTheme == 'Arctic' )
+		// 04/24/2022 Paul.  Smae for Pacific theme. 
+		if ( userTheme == 'Arctic' || userTheme == 'Pacific' )
 		{
 			toggleWidth = '24px';
 		}
@@ -199,4 +200,3 @@ class TeamTree extends React.Component<ITeamTreeProps, ITeamTreeState>
 }
 
 export default withRouter(TeamTree);
-

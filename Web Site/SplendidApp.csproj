@@ -22,7 +22,8 @@
     <AssemblyVersion Condition=" '$(VersionSuffix)' != '' ">$(VersionSuffix)</AssemblyVersion>
     <Version Condition=" '$(VersionSuffix)' == '' ">0.0.1.0</Version>
     <Version Condition=" '$(VersionSuffix)' != '' ">$(VersionSuffix)</Version>
-    <AssemblyVersion>$(VersionSuffix)</AssemblyVersion>
+    <AssemblyVersion>1.1.22132.0346</AssemblyVersion>
+    <Version>1.1.22132.0347</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -52,15 +53,12 @@
     <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
     <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)platforms\**" />
     <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)pluginss\**" />
+    <None Remove="React\node_modules\**" />
+    <None Remove="React\platforms\**" />
+    <None Remove="React\plugins\**" />
+    <None Remove="React\dist\**" />
     <None Remove="_sgbak\**" />
     <None Remove="**\_sgbak\**" />
+    <None Remove="React\yarn-error.log" />
   </ItemGroup>
-
-  <ItemGroup>
-    <None Remove="React\dist\icon_16x16.939d022e683adc8e0baea2b8f2e5b5af.ico" />
-    <None Remove="React\dist\icon_32x32.939d022e683adc8e0baea2b8f2e5b5af.ico" />
-    <None Remove="React\dist\index.html" />
-    <None Remove="React\dist\manifest.adaaab98716b3c72a8e5e3b3624be569.json" />
-  </ItemGroup>
-
 </Project>

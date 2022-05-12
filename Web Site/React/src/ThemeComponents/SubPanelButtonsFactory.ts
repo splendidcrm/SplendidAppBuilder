@@ -13,6 +13,8 @@
 // 3. Scripts. 
 // 4. Components and Views. 
 
+// 04/01/2022 Paul.  Add Pacific theme, derived from Arctic.
+import PacificSubPanelHeaderButtons    from './Pacific/SubPanelHeaderButtons'  ;
 import ArcticSubPanelHeaderButtons    from './Arctic/SubPanelHeaderButtons'   ;
 
 export default function SubPanelButtonsFactory(sTHEME: string)
@@ -20,6 +22,8 @@ export default function SubPanelButtonsFactory(sTHEME: string)
 	let ctl: any = null;
 	switch ( sTHEME )
 	{
+		// 04/01/2022 Paul.  Add Pacific theme, derived from Arctic.
+		case 'Pacific'  :  ctl = PacificSubPanelHeaderButtons  ;  break;
 		case 'Arctic'   :  ctl = ArcticSubPanelHeaderButtons   ;  break;
 	}
 	if ( ctl )
@@ -33,5 +37,4 @@ export default function SubPanelButtonsFactory(sTHEME: string)
 	}
 	return ctl;
 }
-
 

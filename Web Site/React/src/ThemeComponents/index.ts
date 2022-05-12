@@ -14,6 +14,8 @@ import * as React from 'react';
 // 3. Scripts. 
 import { isMobileDevice, isTouchDevice, screenWidth } from '../scripts/utility'               ;
 // 4. Components and Views. 
+// 04/01/2022 Paul.  Add Pacific theme, derived from Arctic.
+import PacificTopNav                  from './Pacific/TopNav'                 ;
 import ArcticTopNav                   from './Arctic/TopNav'                  ;
 // 05/10/2021 Paul.  The new menu system leaves the menu up or pops up in the wrong location, so only use on mobile devices. 
 import ArcticTopNav_Desktop           from './Arctic/TopNav_Desktop'          ;
@@ -32,6 +34,8 @@ export function TopNavFactory(sTHEME: string)
 		//console.log((new Date()).toISOString() + ' ' + 'TopNavFactory mobile ' + sTHEME);
 		switch ( sTHEME )
 		{
+			// 04/01/2022 Paul.  Add Pacific theme, derived from Arctic.
+			case 'Pacific'  :  ctl = PacificTopNav  ;  break;
 			case 'Arctic'   :  ctl = ArcticTopNav   ;  break;
 		}
 	}
@@ -49,7 +53,8 @@ export function TopNavFactory(sTHEME: string)
 	}
 	else
 	{
-		ctl = ArcticTopNav;
+		// 04/01/2022 Paul.  Add Pacific theme, derived from Arctic.
+		ctl = PacificTopNav;
 		//console.log((new Date()).toISOString() + ' ' + 'TopNavFactory not found ' + sTHEME + ', using Arctic');
 	}
 	return ctl;
@@ -71,4 +76,3 @@ export function SideBarFactory(sTHEME: string)
 	}
 	return ctl;
 }
-
