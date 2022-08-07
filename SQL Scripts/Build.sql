@@ -5165,6 +5165,7 @@ GO
 -- 10/28/2009 Paul.  Add UTC date to allow this table to sync. 
 -- 10/13/2012 Paul.  Add table info for HTML5 Offline Client. 
 -- 03/20/2016 Paul.  Increase PRIMARY_FIELD size to 255 to support OfficeAddin. 
+-- 03/30/2022 Paul.  Add Insight fields. 
 if not exists (select * from INFORMATION_SCHEMA.TABLES where TABLE_NAME = 'DETAILVIEWS_RELATIONSHIPS' and TABLE_TYPE = 'BASE TABLE')
   begin
 	print 'Create Table dbo.DETAILVIEWS_RELATIONSHIPS';
@@ -5187,6 +5188,9 @@ if not exists (select * from INFORMATION_SCHEMA.TABLES where TABLE_NAME = 'DETAI
 		, PRIMARY_FIELD                      nvarchar(255) null
 		, SORT_FIELD                         nvarchar(50) null
 		, SORT_DIRECTION                     nvarchar(10) null
+		, INSIGHT_LABEL                      nvarchar(100) null
+		, INSIGHT_OPERATOR                   nvarchar(2000) null
+		, INSIGHT_VIEW                       nvarchar(50) null
 		)
 
 	create index IDX_DETAILVIEWS_RELATIONSHIPS_DETAIL_NAME on dbo.DETAILVIEWS_RELATIONSHIPS (DETAIL_NAME, DELETED, RELATIONSHIP_ENABLED)
@@ -11049,6 +11053,7 @@ GO
 -- 01/24/2010 Paul.  We need the ID for report dashlet management. 
 -- 01/27/2010 Paul.  Remove the join to DETAILVIEWS so that we can use this table for EditView Relationships. 
 -- 10/13/2012 Paul.  Add table info for HTML5 Offline Client. 
+-- 03/30/2022 Paul.  Add Insight fields. 
 Create View dbo.vwDETAILVIEWS_RELATIONSHIPS
 as
 select DETAILVIEWS_RELATIONSHIPS.ID
@@ -11061,6 +11066,9 @@ select DETAILVIEWS_RELATIONSHIPS.ID
      , DETAILVIEWS_RELATIONSHIPS.PRIMARY_FIELD
      , DETAILVIEWS_RELATIONSHIPS.SORT_FIELD
      , DETAILVIEWS_RELATIONSHIPS.SORT_DIRECTION
+     , DETAILVIEWS_RELATIONSHIPS.INSIGHT_LABEL
+     , DETAILVIEWS_RELATIONSHIPS.INSIGHT_VIEW
+     , DETAILVIEWS_RELATIONSHIPS.INSIGHT_OPERATOR
   from      DETAILVIEWS_RELATIONSHIPS
  inner join MODULES
          on MODULES.MODULE_NAME    = DETAILVIEWS_RELATIONSHIPS.MODULE_NAME
@@ -11100,6 +11108,7 @@ GO
 -- 01/27/2010 Paul.  Remove the join to DETAILVIEWS so that we can use this table for EditView Relationships. 
 -- 10/13/2012 Paul.  Add table info for HTML5 Offline Client. 
 -- 02/14/2013 Paul.  Add CONTROL_NAME to make it easy to copy. 
+-- 03/30/2022 Paul.  Add Insight fields. 
 Create View dbo.vwDETAILVIEWS_RELATIONSHIPS_La
 as
 select DETAILVIEWS_RELATIONSHIPS.ID
@@ -11113,6 +11122,9 @@ select DETAILVIEWS_RELATIONSHIPS.ID
      , DETAILVIEWS_RELATIONSHIPS.PRIMARY_FIELD
      , DETAILVIEWS_RELATIONSHIPS.SORT_FIELD
      , DETAILVIEWS_RELATIONSHIPS.SORT_DIRECTION
+     , DETAILVIEWS_RELATIONSHIPS.INSIGHT_LABEL
+     , DETAILVIEWS_RELATIONSHIPS.INSIGHT_VIEW
+     , DETAILVIEWS_RELATIONSHIPS.INSIGHT_OPERATOR
   from      DETAILVIEWS_RELATIONSHIPS
  inner join MODULES
          on MODULES.MODULE_NAME    = DETAILVIEWS_RELATIONSHIPS.MODULE_NAME
@@ -20222,11 +20234,13 @@ GO
  * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *********************************************************************************************************************/
 -- 02/21/2017 Paul.  Allow a field to be added to the end using an index of -1. 
+-- 04/15/2022 Paul.  Add support for Pacific layout tabs. 
 Create Procedure dbo.spDETAILVIEWS_FIELDS_InsHeader
 	( @DETAIL_NAME       nvarchar( 50)
 	, @FIELD_INDEX       int
 	, @DATA_LABEL        nvarchar(150)
 	, @COLSPAN           int
+	, @DATA_FORMAT       nvarchar(max) = null
 	)
 as
   begin
@@ -20266,6 +20280,7 @@ as
 			, FIELD_TYPE       
 			, DATA_LABEL       
 			, COLSPAN          
+			, DATA_FORMAT      
 			)
 		values 
 			( @ID               
@@ -20278,6 +20293,7 @@ as
 			, N'Header'         
 			, @DATA_LABEL       
 			, @COLSPAN          
+			, @DATA_FORMAT      
 			);
 	end -- if;
   end
@@ -21364,6 +21380,7 @@ GO
 -- 10/13/2012 Paul.  Add table info for HTML5 Offline Client. 
 -- 03/14/2016 Paul.  The new layout editor needs to update the RELATIONSHIP_ENABLED field. 
 -- 03/20/2016 Paul.  Increase PRIMARY_FIELD size to 255 to support OfficeAddin. 
+-- 03/30/2022 Paul.  Add Insight fields. 
 Create Procedure dbo.spDETAILVIEWS_RELATIONSHIPS_Update
 	( @ID                  uniqueidentifier output
 	, @MODIFIED_USER_ID    uniqueidentifier
@@ -21377,6 +21394,8 @@ Create Procedure dbo.spDETAILVIEWS_RELATIONSHIPS_Update
 	, @SORT_FIELD          nvarchar(50) = null
 	, @SORT_DIRECTION      nvarchar(10) = null
 	, @RELATIONSHIP_ENABLED bit = null
+	, @INSIGHT_VIEW         nvarchar(50) = null
+	, @INSIGHT_LABEL        nvarchar(100) = null
 	)
 as
   begin
@@ -21402,6 +21421,8 @@ as
 			, PRIMARY_FIELD      
 			, SORT_FIELD         
 			, SORT_DIRECTION     
+			, INSIGHT_VIEW       
+			, INSIGHT_LABEL      
 			)
 		values 
 			( @ID                 
@@ -21419,6 +21440,8 @@ as
 			, @PRIMARY_FIELD      
 			, @SORT_FIELD         
 			, @SORT_DIRECTION     
+			, @INSIGHT_VIEW       
+			, @INSIGHT_LABEL      
 			);
 	end else begin
 		update DETAILVIEWS_RELATIONSHIPS
@@ -21435,6 +21458,8 @@ as
 		     , SORT_FIELD           = @SORT_FIELD         
 		     , SORT_DIRECTION       = @SORT_DIRECTION     
 		     , RELATIONSHIP_ENABLED = isnull(@RELATIONSHIP_ENABLED, RELATIONSHIP_ENABLED)
+		     , INSIGHT_VIEW         = isnull(@INSIGHT_VIEW, INSIGHT_VIEW)
+		     , INSIGHT_LABEL        = isnull(@INSIGHT_LABEL, INSIGHT_LABEL)
 		 where ID                   = @ID                 ;
 	end -- if;
   end
@@ -33743,6 +33768,59 @@ GO
 Grant Execute on dbo.spDETAILVIEWS_FIELDS_InsModuleLink to public;
 GO
  
+if exists (select * from INFORMATION_SCHEMA.ROUTINES where ROUTINE_NAME = 'spDETAILVIEWS_RELATIONSHIPS_UpdateInsight' and ROUTINE_TYPE = 'PROCEDURE')
+	Drop Procedure dbo.spDETAILVIEWS_RELATIONSHIPS_UpdateInsight;
+GO
+
+
+/**********************************************************************************************************************
+ * Copyright (C) 2005-2022 SplendidCRM Software, Inc. 
+ * MIT License
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation 
+ * files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, 
+ * modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software 
+ * is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES 
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE 
+ * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR 
+ * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *********************************************************************************************************************/
+Create Procedure dbo.spDETAILVIEWS_RELATIONSHIPS_UpdateInsight
+	( @MODIFIED_USER_ID     uniqueidentifier
+	, @DETAIL_NAME          nvarchar(50)
+	, @CONTROL_NAME         nvarchar(100)
+	, @INSIGHT_LABEL        nvarchar(100)
+	, @INSIGHT_VIEW         nvarchar(50)
+	, @INSIGHT_OPERATOR     nvarchar(2000)
+	)
+as
+  begin
+	set nocount on
+
+	if exists(select * from DETAILVIEWS_RELATIONSHIPS where DETAIL_NAME = @DETAIL_NAME and CONTROL_NAME = @CONTROL_NAME and DELETED = 0) begin -- then	
+		-- BEGIN Oracle Exception
+			update DETAILVIEWS_RELATIONSHIPS
+			   set MODIFIED_USER_ID     = @MODIFIED_USER_ID 
+			     , DATE_MODIFIED        =  getdate()        
+			     , DATE_MODIFIED_UTC    =  getutcdate()     
+			     , INSIGHT_LABEL        = @INSIGHT_LABEL
+			     , INSIGHT_VIEW         = @INSIGHT_VIEW
+			     , INSIGHT_OPERATOR     = @INSIGHT_OPERATOR
+			 where DETAIL_NAME          = @DETAIL_NAME
+			   and CONTROL_NAME         = @CONTROL_NAME
+			   and DELETED              = 0;
+		-- END Oracle Exception
+	end -- if;
+  end
+GO
+
+Grant Execute on dbo.spDETAILVIEWS_RELATIONSHIPS_UpdateInsight to public;
+GO
+
 if exists (select * from INFORMATION_SCHEMA.ROUTINES where ROUTINE_NAME = 'spDYNAMIC_BUTTONS_InsButton' and ROUTINE_TYPE = 'PROCEDURE')
 	Drop Procedure dbo.spDYNAMIC_BUTTONS_InsButton;
 GO
@@ -35838,11 +35916,13 @@ GO
  * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR 
  * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *********************************************************************************************************************/
+-- 04/15/2022 Paul.  Add support for Pacific layout tabs. 
 Create Procedure dbo.spEDITVIEWS_FIELDS_InsHeader
 	( @EDIT_NAME         nvarchar( 50)
 	, @FIELD_INDEX       int
 	, @DATA_LABEL        nvarchar(150)
 	, @COLSPAN           int
+	, @DATA_FORMAT       nvarchar(max) = null
 	)
 as
   begin
@@ -35887,6 +35967,7 @@ as
 			, FORMAT_TAB_INDEX 
 			, COLSPAN          
 			, ROWSPAN          
+			, DATA_FORMAT      
 			)
 		values 
 			( @ID               
@@ -35905,6 +35986,7 @@ as
 			, null              
 			, @COLSPAN          
 			, null              
+			, @DATA_FORMAT      
 			);
 	end -- if;
   end
@@ -43940,7 +44022,8 @@ exec dbo.spCONFIG_InsertOnly null, 'system', 'default_password'                 
 -- 04/28/2012 Paul.  Make the default theme Atlantic. 
 -- 03/12/2014 Paul.  Make the default theme Seven. 
 -- 10/02/2016 Paul.  Make the default theme Arctic. 
-exec dbo.spCONFIG_InsertOnly null, 'system', 'default_theme'                          , 'Arctic';
+-- 04/01/2022 Paul.  Make the default theme Pacific. 
+exec dbo.spCONFIG_InsertOnly null, 'system', 'default_theme'                          , 'Pacific';
 -- 07/25/2015 Paul.  SugarClassic and Sugar2006 were moved long ago.  We need to change the default to prevent app crash. 
 if exists(select * from CONFIG where NAME = 'default_theme' and VALUE = 'SugarClassic' and DELETED = 0) begin -- then
 	update CONFIG
@@ -44259,7 +44342,9 @@ GO
 exec dbo.spCONFIG_InsertOnly null, 'system', 'default_email_opt_out'                , 'true';
 exec dbo.spCONFIG_InsertOnly null, 'system', 'default_do_not_call'                  , 'true';
 -- 07/28/2019 Paul.  Specify default so that React client will not complain. 
-exec dbo.spCONFIG_InsertOnly null, 'system', 'enable_dynamic_assignment'              , 'false';
+exec dbo.spCONFIG_InsertOnly null, 'system', 'enable_dynamic_assignment'            , 'false';
+-- 03/30/2022 Paul.  Add Insight fields. 
+exec dbo.spCONFIG_InsertOnly null, 'system', 'enable_insights'                      , 'true';
 GO
 
 set nocount off;

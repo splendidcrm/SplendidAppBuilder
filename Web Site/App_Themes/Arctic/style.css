@@ -21,6 +21,13 @@ body
 	font-weight: normal;
 	font-family: Arial, Verdana, sans-serif;
 }
+/* 04/03/2022 Paul.  Move from inline style. */
+#appMainContent
+{
+	margin-left: 5px;
+	margin-right: 5px;
+	width: 100%;
+}
 p
 {
 	margin-top: 0px;

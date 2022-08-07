@@ -36,24 +36,29 @@ namespace SplendidCRM
 			if ( Application == null )
 			{
 				Application = new Dictionary<string, object>();
-				this["CONFIG.Azure.SingleSignOn.Enabled"           ] = Configuration["Azure.SingleSignOn:Enabled"           ];
-				this["CONFIG.Azure.SingleSignOn.AadTenantDomain"   ] = Configuration["Azure.SingleSignOn:AadTenantDomain"   ];
-				this["CONFIG.Azure.SingleSignOn.ValidIssuer"       ] = Configuration["Azure.SingleSignOn:ValidIssuer"       ];
-				this["CONFIG.Azure.SingleSignOn.AadTenantId"       ] = Configuration["Azure.SingleSignOn:AadTenantId"       ];
-				this["CONFIG.Azure.SingleSignOn.AadClientId"       ] = Configuration["Azure.SingleSignOn:AadClientId"       ];
-				this["CONFIG.Azure.SingleSignOn.AadSecretId"       ] = Configuration["Azure.SingleSignOn:AadSecretId"       ];
-				this["CONFIG.Azure.SingleSignOn.MobileClientId"    ] = Configuration["Azure.SingleSignOn:MobileClientId"    ];
-				this["CONFIG.Azure.SingleSignOn.MobileRedirectUrl" ] = Configuration["Azure.SingleSignOn:MobileRedirectUrl" ];
-				this["CONFIG.Azure.SingleSignOn.Realm"             ] = Configuration["Azure.SingleSignOn:Realm"             ];
-				this["CONFIG.Azure.SingleSignOn.FederationMetadata"] = Configuration["Azure.SingleSignOn:FederationMetadata"];
+				// 06/17/2022 Paul.  Protect against parallel access. 
+				// Operations that change non-concurrent collections must have exclusive access. A concurrent update was performed on this collection and corrupted its state. The collection's state is no longer correct.
+				lock ( Application )
+				{
+					this["CONFIG.Azure.SingleSignOn.Enabled"           ] = Configuration["Azure.SingleSignOn:Enabled"           ];
+					this["CONFIG.Azure.SingleSignOn.AadTenantDomain"   ] = Configuration["Azure.SingleSignOn:AadTenantDomain"   ];
+					this["CONFIG.Azure.SingleSignOn.ValidIssuer"       ] = Configuration["Azure.SingleSignOn:ValidIssuer"       ];
+					this["CONFIG.Azure.SingleSignOn.AadTenantId"       ] = Configuration["Azure.SingleSignOn:AadTenantId"       ];
+					this["CONFIG.Azure.SingleSignOn.AadClientId"       ] = Configuration["Azure.SingleSignOn:AadClientId"       ];
+					this["CONFIG.Azure.SingleSignOn.AadSecretId"       ] = Configuration["Azure.SingleSignOn:AadSecretId"       ];
+					this["CONFIG.Azure.SingleSignOn.MobileClientId"    ] = Configuration["Azure.SingleSignOn:MobileClientId"    ];
+					this["CONFIG.Azure.SingleSignOn.MobileRedirectUrl" ] = Configuration["Azure.SingleSignOn:MobileRedirectUrl" ];
+					this["CONFIG.Azure.SingleSignOn.Realm"             ] = Configuration["Azure.SingleSignOn:Realm"             ];
+					this["CONFIG.Azure.SingleSignOn.FederationMetadata"] = Configuration["Azure.SingleSignOn:FederationMetadata"];
 
-				this["CONFIG.ADFS.SingleSignOn.Enabled"            ] = Configuration["ADFS.SingleSignOn:Enabled"            ];
-				this["CONFIG.ADFS.SingleSignOn.Authority"          ] = Configuration["ADFS.SingleSignOn:Authority"          ];
-				this["CONFIG.ADFS.SingleSignOn.ClientId"           ] = Configuration["ADFS.SingleSignOn:ClientId"           ];
-				this["CONFIG.ADFS.SingleSignOn.MobileClientId"     ] = Configuration["ADFS.SingleSignOn:MobileClientId"     ];
-				this["CONFIG.ADFS.SingleSignOn.MobileRedirectUrl"  ] = Configuration["ADFS.SingleSignOn:MobileRedirectUrl"  ];
-				this["CONFIG.ADFS.SingleSignOn.Realm"              ] = Configuration["ADFS.SingleSignOn:Realm"              ];
-				this["CONFIG.ADFS.SingleSignOn.Thumbprint"         ] = Configuration["ADFS.SingleSignOn:Thumbprint"         ];
+					this["CONFIG.ADFS.SingleSignOn.Enabled"            ] = Configuration["ADFS.SingleSignOn:Enabled"            ];
+					this["CONFIG.ADFS.SingleSignOn.Authority"          ] = Configuration["ADFS.SingleSignOn:Authority"          ];
+					this["CONFIG.ADFS.SingleSignOn.ClientId"           ] = Configuration["ADFS.SingleSignOn:ClientId"           ];
+					this["CONFIG.ADFS.SingleSignOn.MobileClientId"     ] = Configuration["ADFS.SingleSignOn:MobileClientId"     ];
+					this["CONFIG.ADFS.SingleSignOn.MobileRedirectUrl"  ] = Configuration["ADFS.SingleSignOn:MobileRedirectUrl"  ];
+					this["CONFIG.ADFS.SingleSignOn.Realm"              ] = Configuration["ADFS.SingleSignOn:Realm"              ];
+					this["CONFIG.ADFS.SingleSignOn.Thumbprint"         ] = Configuration["ADFS.SingleSignOn:Thumbprint"         ];
+				}
 			}
 		}
 
@@ -67,7 +72,10 @@ namespace SplendidCRM
 			}
 			set
 			{
-				Application[key] = value;
+				lock ( Application )
+				{
+					Application[key] = value;
+				}
 			}
 		}
 
@@ -89,8 +97,10 @@ namespace SplendidCRM
 
 		public void Remove(string key)
 		{
-			Application.Remove(key);
+			lock ( Application )
+			{
+				Application.Remove(key);
+			}
 		}
 	}
 }
-

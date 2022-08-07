@@ -28682,6 +28682,970 @@ namespace SplendidCRM
 		}
 		#endregion
 
+		#region spPROCESSES_ChangeAssignedUser
+		/// <summary>
+		/// spPROCESSES_ChangeAssignedUser
+		/// </summary>
+		public void spPROCESSES_ChangeAssignedUser(Guid gID, Guid gASSIGNED_USER_ID, string sPROCESS_NOTES)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_ChangeAssignedUser";
+							IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+							IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+							IDbDataParameter parASSIGNED_USER_ID = Sql.AddParameter(cmd, "@ASSIGNED_USER_ID", gASSIGNED_USER_ID  );
+							IDbDataParameter parPROCESS_NOTES    = Sql.AddParameter(cmd, "@PROCESS_NOTES"   , sPROCESS_NOTES     );
+							cmd.ExecuteNonQuery();
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_ChangeAssignedUser
+		/// <summary>
+		/// spPROCESSES_ChangeAssignedUser
+		/// </summary>
+		public void spPROCESSES_ChangeAssignedUser(Guid gID, Guid gASSIGNED_USER_ID, string sPROCESS_NOTES, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_ChangeAssignedUser";
+				IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+				IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+				IDbDataParameter parASSIGNED_USER_ID = Sql.AddParameter(cmd, "@ASSIGNED_USER_ID", gASSIGNED_USER_ID  );
+				IDbDataParameter parPROCESS_NOTES    = Sql.AddParameter(cmd, "@PROCESS_NOTES"   , sPROCESS_NOTES     );
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_ChangeAssignedUser
+		/// <summary>
+		/// spPROCESSES_ChangeAssignedUser
+		/// </summary>
+		public IDbCommand cmdPROCESSES_ChangeAssignedUser(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_ChangeAssignedUser";
+			IDbDataParameter parID               = Sql.CreateParameter(cmd, "@ID"              , "Guid",  16);
+			IDbDataParameter parMODIFIED_USER_ID = Sql.CreateParameter(cmd, "@MODIFIED_USER_ID", "Guid",  16);
+			IDbDataParameter parASSIGNED_USER_ID = Sql.CreateParameter(cmd, "@ASSIGNED_USER_ID", "Guid",  16);
+			IDbDataParameter parPROCESS_NOTES    = Sql.CreateParameter(cmd, "@PROCESS_NOTES"   , "string", 104857600);
+			return cmd;
+		}
+		#endregion
+
+		#region spPROCESSES_ChangeProcessUser
+		/// <summary>
+		/// spPROCESSES_ChangeProcessUser
+		/// </summary>
+		public void spPROCESSES_ChangeProcessUser(Guid gID, Guid gPROCESS_USER_ID, string sPROCESS_NOTES)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_ChangeProcessUser";
+							IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+							IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+							IDbDataParameter parPROCESS_USER_ID  = Sql.AddParameter(cmd, "@PROCESS_USER_ID" , gPROCESS_USER_ID   );
+							IDbDataParameter parPROCESS_NOTES    = Sql.AddParameter(cmd, "@PROCESS_NOTES"   , sPROCESS_NOTES     );
+							cmd.ExecuteNonQuery();
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_ChangeProcessUser
+		/// <summary>
+		/// spPROCESSES_ChangeProcessUser
+		/// </summary>
+		public void spPROCESSES_ChangeProcessUser(Guid gID, Guid gPROCESS_USER_ID, string sPROCESS_NOTES, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_ChangeProcessUser";
+				IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+				IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+				IDbDataParameter parPROCESS_USER_ID  = Sql.AddParameter(cmd, "@PROCESS_USER_ID" , gPROCESS_USER_ID   );
+				IDbDataParameter parPROCESS_NOTES    = Sql.AddParameter(cmd, "@PROCESS_NOTES"   , sPROCESS_NOTES     );
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_ChangeProcessUser
+		/// <summary>
+		/// spPROCESSES_ChangeProcessUser
+		/// </summary>
+		public IDbCommand cmdPROCESSES_ChangeProcessUser(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_ChangeProcessUser";
+			IDbDataParameter parID               = Sql.CreateParameter(cmd, "@ID"              , "Guid",  16);
+			IDbDataParameter parMODIFIED_USER_ID = Sql.CreateParameter(cmd, "@MODIFIED_USER_ID", "Guid",  16);
+			IDbDataParameter parPROCESS_USER_ID  = Sql.CreateParameter(cmd, "@PROCESS_USER_ID" , "Guid",  16);
+			IDbDataParameter parPROCESS_NOTES    = Sql.CreateParameter(cmd, "@PROCESS_NOTES"   , "string", 104857600);
+			return cmd;
+		}
+		#endregion
+
+		#region spPROCESSES_EndEventGateway
+		/// <summary>
+		/// spPROCESSES_EndEventGateway
+		/// </summary>
+		public void spPROCESSES_EndEventGateway(Guid gBUSINESS_PROCESS_INSTANCE_ID, string sBOOKMARK_NAME)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_EndEventGateway";
+							IDbDataParameter parMODIFIED_USER_ID             = Sql.AddParameter(cmd, "@MODIFIED_USER_ID"            ,  Security.USER_ID              );
+							IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.AddParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", gBUSINESS_PROCESS_INSTANCE_ID  );
+							IDbDataParameter parBOOKMARK_NAME                = Sql.AddParameter(cmd, "@BOOKMARK_NAME"               , sBOOKMARK_NAME                 , 100);
+							cmd.ExecuteNonQuery();
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_EndEventGateway
+		/// <summary>
+		/// spPROCESSES_EndEventGateway
+		/// </summary>
+		public void spPROCESSES_EndEventGateway(Guid gBUSINESS_PROCESS_INSTANCE_ID, string sBOOKMARK_NAME, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_EndEventGateway";
+				IDbDataParameter parMODIFIED_USER_ID             = Sql.AddParameter(cmd, "@MODIFIED_USER_ID"            ,  Security.USER_ID              );
+				IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.AddParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", gBUSINESS_PROCESS_INSTANCE_ID  );
+				IDbDataParameter parBOOKMARK_NAME                = Sql.AddParameter(cmd, "@BOOKMARK_NAME"               , sBOOKMARK_NAME                 , 100);
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_EndEventGateway
+		/// <summary>
+		/// spPROCESSES_EndEventGateway
+		/// </summary>
+		public IDbCommand cmdPROCESSES_EndEventGateway(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_EndEventGateway";
+			IDbDataParameter parMODIFIED_USER_ID             = Sql.CreateParameter(cmd, "@MODIFIED_USER_ID"            , "Guid",  16);
+			IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.CreateParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", "Guid",  16);
+			IDbDataParameter parBOOKMARK_NAME                = Sql.CreateParameter(cmd, "@BOOKMARK_NAME"               , "string", 100);
+			return cmd;
+		}
+		#endregion
+
+		#region spPROCESSES_HISTORY_Delete
+		/// <summary>
+		/// spPROCESSES_HISTORY_Delete
+		/// </summary>
+		public void spPROCESSES_HISTORY_Delete(Guid gID)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_HISTORY_Delete";
+							IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+							IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+							cmd.ExecuteNonQuery();
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_HISTORY_Delete
+		/// <summary>
+		/// spPROCESSES_HISTORY_Delete
+		/// </summary>
+		public void spPROCESSES_HISTORY_Delete(Guid gID, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_HISTORY_Delete";
+				IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+				IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_HISTORY_Delete
+		/// <summary>
+		/// spPROCESSES_HISTORY_Delete
+		/// </summary>
+		public IDbCommand cmdPROCESSES_HISTORY_Delete(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_HISTORY_Delete";
+			IDbDataParameter parID               = Sql.CreateParameter(cmd, "@ID"              , "Guid",  16);
+			IDbDataParameter parMODIFIED_USER_ID = Sql.CreateParameter(cmd, "@MODIFIED_USER_ID", "Guid",  16);
+			return cmd;
+		}
+		#endregion
+
+		#region spPROCESSES_HISTORY_InsertOnly
+		/// <summary>
+		/// spPROCESSES_HISTORY_InsertOnly
+		/// </summary>
+		public void spPROCESSES_HISTORY_InsertOnly(Guid gPROCESS_ID, Guid gBUSINESS_PROCESS_INSTANCE_ID, string sPROCESS_ACTION, Guid gPROCESS_USER_ID, Guid gASSIGNED_USER_ID, Guid gAPPROVAL_USER_ID, string sSTATUS)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_HISTORY_InsertOnly";
+							IDbDataParameter parMODIFIED_USER_ID             = Sql.AddParameter(cmd, "@MODIFIED_USER_ID"            ,  Security.USER_ID              );
+							IDbDataParameter parPROCESS_ID                   = Sql.AddParameter(cmd, "@PROCESS_ID"                  , gPROCESS_ID                    );
+							IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.AddParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", gBUSINESS_PROCESS_INSTANCE_ID  );
+							IDbDataParameter parPROCESS_ACTION               = Sql.AddParameter(cmd, "@PROCESS_ACTION"              , sPROCESS_ACTION                ,  50);
+							IDbDataParameter parPROCESS_USER_ID              = Sql.AddParameter(cmd, "@PROCESS_USER_ID"             , gPROCESS_USER_ID               );
+							IDbDataParameter parASSIGNED_USER_ID             = Sql.AddParameter(cmd, "@ASSIGNED_USER_ID"            , gASSIGNED_USER_ID              );
+							IDbDataParameter parAPPROVAL_USER_ID             = Sql.AddParameter(cmd, "@APPROVAL_USER_ID"            , gAPPROVAL_USER_ID              );
+							IDbDataParameter parSTATUS                       = Sql.AddParameter(cmd, "@STATUS"                      , sSTATUS                        ,  50);
+							cmd.ExecuteNonQuery();
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_HISTORY_InsertOnly
+		/// <summary>
+		/// spPROCESSES_HISTORY_InsertOnly
+		/// </summary>
+		public void spPROCESSES_HISTORY_InsertOnly(Guid gPROCESS_ID, Guid gBUSINESS_PROCESS_INSTANCE_ID, string sPROCESS_ACTION, Guid gPROCESS_USER_ID, Guid gASSIGNED_USER_ID, Guid gAPPROVAL_USER_ID, string sSTATUS, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_HISTORY_InsertOnly";
+				IDbDataParameter parMODIFIED_USER_ID             = Sql.AddParameter(cmd, "@MODIFIED_USER_ID"            ,  Security.USER_ID              );
+				IDbDataParameter parPROCESS_ID                   = Sql.AddParameter(cmd, "@PROCESS_ID"                  , gPROCESS_ID                    );
+				IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.AddParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", gBUSINESS_PROCESS_INSTANCE_ID  );
+				IDbDataParameter parPROCESS_ACTION               = Sql.AddParameter(cmd, "@PROCESS_ACTION"              , sPROCESS_ACTION                ,  50);
+				IDbDataParameter parPROCESS_USER_ID              = Sql.AddParameter(cmd, "@PROCESS_USER_ID"             , gPROCESS_USER_ID               );
+				IDbDataParameter parASSIGNED_USER_ID             = Sql.AddParameter(cmd, "@ASSIGNED_USER_ID"            , gASSIGNED_USER_ID              );
+				IDbDataParameter parAPPROVAL_USER_ID             = Sql.AddParameter(cmd, "@APPROVAL_USER_ID"            , gAPPROVAL_USER_ID              );
+				IDbDataParameter parSTATUS                       = Sql.AddParameter(cmd, "@STATUS"                      , sSTATUS                        ,  50);
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_HISTORY_InsertOnly
+		/// <summary>
+		/// spPROCESSES_HISTORY_InsertOnly
+		/// </summary>
+		public IDbCommand cmdPROCESSES_HISTORY_InsertOnly(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_HISTORY_InsertOnly";
+			IDbDataParameter parMODIFIED_USER_ID             = Sql.CreateParameter(cmd, "@MODIFIED_USER_ID"            , "Guid",  16);
+			IDbDataParameter parPROCESS_ID                   = Sql.CreateParameter(cmd, "@PROCESS_ID"                  , "Guid",  16);
+			IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.CreateParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", "Guid",  16);
+			IDbDataParameter parPROCESS_ACTION               = Sql.CreateParameter(cmd, "@PROCESS_ACTION"              , "string",  50);
+			IDbDataParameter parPROCESS_USER_ID              = Sql.CreateParameter(cmd, "@PROCESS_USER_ID"             , "Guid",  16);
+			IDbDataParameter parASSIGNED_USER_ID             = Sql.CreateParameter(cmd, "@ASSIGNED_USER_ID"            , "Guid",  16);
+			IDbDataParameter parAPPROVAL_USER_ID             = Sql.CreateParameter(cmd, "@APPROVAL_USER_ID"            , "Guid",  16);
+			IDbDataParameter parSTATUS                       = Sql.CreateParameter(cmd, "@STATUS"                      , "string",  50);
+			return cmd;
+		}
+		#endregion
+
+		#region spPROCESSES_InsertOnly
+		/// <summary>
+		/// spPROCESSES_InsertOnly
+		/// </summary>
+		public void spPROCESSES_InsertOnly(Guid gBUSINESS_PROCESS_INSTANCE_ID, string sACTIVITY_INSTANCE, string sACTIVITY_NAME, Guid gBUSINESS_PROCESS_ID, Guid gPROCESS_USER_ID, string sBOOKMARK_NAME, string sPARENT_TYPE, Guid gPARENT_ID, string sUSER_TASK_TYPE, bool bCHANGE_ASSIGNED_USER, Guid gCHANGE_ASSIGNED_TEAM_ID, bool bCHANGE_PROCESS_USER, Guid gCHANGE_PROCESS_TEAM_ID, string sUSER_ASSIGNMENT_METHOD, Guid gSTATIC_ASSIGNED_USER_ID, Guid gDYNAMIC_PROCESS_TEAM_ID, Guid gDYNAMIC_PROCESS_ROLE_ID, string sREAD_ONLY_FIELDS, string sREQUIRED_FIELDS, string sDURATION_UNITS, Int32 nDURATION_VALUE)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_InsertOnly";
+							IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.AddParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", gBUSINESS_PROCESS_INSTANCE_ID  );
+							IDbDataParameter parACTIVITY_INSTANCE            = Sql.AddParameter(cmd, "@ACTIVITY_INSTANCE"           , sACTIVITY_INSTANCE             , 100);
+							IDbDataParameter parACTIVITY_NAME                = Sql.AddParameter(cmd, "@ACTIVITY_NAME"               , sACTIVITY_NAME                 , 100);
+							IDbDataParameter parBUSINESS_PROCESS_ID          = Sql.AddParameter(cmd, "@BUSINESS_PROCESS_ID"         , gBUSINESS_PROCESS_ID           );
+							IDbDataParameter parPROCESS_USER_ID              = Sql.AddParameter(cmd, "@PROCESS_USER_ID"             , gPROCESS_USER_ID               );
+							IDbDataParameter parBOOKMARK_NAME                = Sql.AddParameter(cmd, "@BOOKMARK_NAME"               , sBOOKMARK_NAME                 , 100);
+							IDbDataParameter parPARENT_TYPE                  = Sql.AddParameter(cmd, "@PARENT_TYPE"                 , sPARENT_TYPE                   ,  50);
+							IDbDataParameter parPARENT_ID                    = Sql.AddParameter(cmd, "@PARENT_ID"                   , gPARENT_ID                     );
+							IDbDataParameter parUSER_TASK_TYPE               = Sql.AddParameter(cmd, "@USER_TASK_TYPE"              , sUSER_TASK_TYPE                ,  50);
+							IDbDataParameter parCHANGE_ASSIGNED_USER         = Sql.AddParameter(cmd, "@CHANGE_ASSIGNED_USER"        , bCHANGE_ASSIGNED_USER          );
+							IDbDataParameter parCHANGE_ASSIGNED_TEAM_ID      = Sql.AddParameter(cmd, "@CHANGE_ASSIGNED_TEAM_ID"     , gCHANGE_ASSIGNED_TEAM_ID       );
+							IDbDataParameter parCHANGE_PROCESS_USER          = Sql.AddParameter(cmd, "@CHANGE_PROCESS_USER"         , bCHANGE_PROCESS_USER           );
+							IDbDataParameter parCHANGE_PROCESS_TEAM_ID       = Sql.AddParameter(cmd, "@CHANGE_PROCESS_TEAM_ID"      , gCHANGE_PROCESS_TEAM_ID        );
+							IDbDataParameter parUSER_ASSIGNMENT_METHOD       = Sql.AddParameter(cmd, "@USER_ASSIGNMENT_METHOD"      , sUSER_ASSIGNMENT_METHOD        ,  50);
+							IDbDataParameter parSTATIC_ASSIGNED_USER_ID      = Sql.AddParameter(cmd, "@STATIC_ASSIGNED_USER_ID"     , gSTATIC_ASSIGNED_USER_ID       );
+							IDbDataParameter parDYNAMIC_PROCESS_TEAM_ID      = Sql.AddParameter(cmd, "@DYNAMIC_PROCESS_TEAM_ID"     , gDYNAMIC_PROCESS_TEAM_ID       );
+							IDbDataParameter parDYNAMIC_PROCESS_ROLE_ID      = Sql.AddParameter(cmd, "@DYNAMIC_PROCESS_ROLE_ID"     , gDYNAMIC_PROCESS_ROLE_ID       );
+							IDbDataParameter parREAD_ONLY_FIELDS             = Sql.AddParameter(cmd, "@READ_ONLY_FIELDS"            , sREAD_ONLY_FIELDS              );
+							IDbDataParameter parREQUIRED_FIELDS              = Sql.AddParameter(cmd, "@REQUIRED_FIELDS"             , sREQUIRED_FIELDS               );
+							IDbDataParameter parDURATION_UNITS               = Sql.AddParameter(cmd, "@DURATION_UNITS"              , sDURATION_UNITS                ,  50);
+							IDbDataParameter parDURATION_VALUE               = Sql.AddParameter(cmd, "@DURATION_VALUE"              , nDURATION_VALUE                );
+							cmd.ExecuteNonQuery();
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_InsertOnly
+		/// <summary>
+		/// spPROCESSES_InsertOnly
+		/// </summary>
+		public void spPROCESSES_InsertOnly(Guid gBUSINESS_PROCESS_INSTANCE_ID, string sACTIVITY_INSTANCE, string sACTIVITY_NAME, Guid gBUSINESS_PROCESS_ID, Guid gPROCESS_USER_ID, string sBOOKMARK_NAME, string sPARENT_TYPE, Guid gPARENT_ID, string sUSER_TASK_TYPE, bool bCHANGE_ASSIGNED_USER, Guid gCHANGE_ASSIGNED_TEAM_ID, bool bCHANGE_PROCESS_USER, Guid gCHANGE_PROCESS_TEAM_ID, string sUSER_ASSIGNMENT_METHOD, Guid gSTATIC_ASSIGNED_USER_ID, Guid gDYNAMIC_PROCESS_TEAM_ID, Guid gDYNAMIC_PROCESS_ROLE_ID, string sREAD_ONLY_FIELDS, string sREQUIRED_FIELDS, string sDURATION_UNITS, Int32 nDURATION_VALUE, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_InsertOnly";
+				IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.AddParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", gBUSINESS_PROCESS_INSTANCE_ID  );
+				IDbDataParameter parACTIVITY_INSTANCE            = Sql.AddParameter(cmd, "@ACTIVITY_INSTANCE"           , sACTIVITY_INSTANCE             , 100);
+				IDbDataParameter parACTIVITY_NAME                = Sql.AddParameter(cmd, "@ACTIVITY_NAME"               , sACTIVITY_NAME                 , 100);
+				IDbDataParameter parBUSINESS_PROCESS_ID          = Sql.AddParameter(cmd, "@BUSINESS_PROCESS_ID"         , gBUSINESS_PROCESS_ID           );
+				IDbDataParameter parPROCESS_USER_ID              = Sql.AddParameter(cmd, "@PROCESS_USER_ID"             , gPROCESS_USER_ID               );
+				IDbDataParameter parBOOKMARK_NAME                = Sql.AddParameter(cmd, "@BOOKMARK_NAME"               , sBOOKMARK_NAME                 , 100);
+				IDbDataParameter parPARENT_TYPE                  = Sql.AddParameter(cmd, "@PARENT_TYPE"                 , sPARENT_TYPE                   ,  50);
+				IDbDataParameter parPARENT_ID                    = Sql.AddParameter(cmd, "@PARENT_ID"                   , gPARENT_ID                     );
+				IDbDataParameter parUSER_TASK_TYPE               = Sql.AddParameter(cmd, "@USER_TASK_TYPE"              , sUSER_TASK_TYPE                ,  50);
+				IDbDataParameter parCHANGE_ASSIGNED_USER         = Sql.AddParameter(cmd, "@CHANGE_ASSIGNED_USER"        , bCHANGE_ASSIGNED_USER          );
+				IDbDataParameter parCHANGE_ASSIGNED_TEAM_ID      = Sql.AddParameter(cmd, "@CHANGE_ASSIGNED_TEAM_ID"     , gCHANGE_ASSIGNED_TEAM_ID       );
+				IDbDataParameter parCHANGE_PROCESS_USER          = Sql.AddParameter(cmd, "@CHANGE_PROCESS_USER"         , bCHANGE_PROCESS_USER           );
+				IDbDataParameter parCHANGE_PROCESS_TEAM_ID       = Sql.AddParameter(cmd, "@CHANGE_PROCESS_TEAM_ID"      , gCHANGE_PROCESS_TEAM_ID        );
+				IDbDataParameter parUSER_ASSIGNMENT_METHOD       = Sql.AddParameter(cmd, "@USER_ASSIGNMENT_METHOD"      , sUSER_ASSIGNMENT_METHOD        ,  50);
+				IDbDataParameter parSTATIC_ASSIGNED_USER_ID      = Sql.AddParameter(cmd, "@STATIC_ASSIGNED_USER_ID"     , gSTATIC_ASSIGNED_USER_ID       );
+				IDbDataParameter parDYNAMIC_PROCESS_TEAM_ID      = Sql.AddParameter(cmd, "@DYNAMIC_PROCESS_TEAM_ID"     , gDYNAMIC_PROCESS_TEAM_ID       );
+				IDbDataParameter parDYNAMIC_PROCESS_ROLE_ID      = Sql.AddParameter(cmd, "@DYNAMIC_PROCESS_ROLE_ID"     , gDYNAMIC_PROCESS_ROLE_ID       );
+				IDbDataParameter parREAD_ONLY_FIELDS             = Sql.AddParameter(cmd, "@READ_ONLY_FIELDS"            , sREAD_ONLY_FIELDS              );
+				IDbDataParameter parREQUIRED_FIELDS              = Sql.AddParameter(cmd, "@REQUIRED_FIELDS"             , sREQUIRED_FIELDS               );
+				IDbDataParameter parDURATION_UNITS               = Sql.AddParameter(cmd, "@DURATION_UNITS"              , sDURATION_UNITS                ,  50);
+				IDbDataParameter parDURATION_VALUE               = Sql.AddParameter(cmd, "@DURATION_VALUE"              , nDURATION_VALUE                );
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_InsertOnly
+		/// <summary>
+		/// spPROCESSES_InsertOnly
+		/// </summary>
+		public IDbCommand cmdPROCESSES_InsertOnly(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_InsertOnly";
+			IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.CreateParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", "Guid",  16);
+			IDbDataParameter parACTIVITY_INSTANCE            = Sql.CreateParameter(cmd, "@ACTIVITY_INSTANCE"           , "string", 100);
+			IDbDataParameter parACTIVITY_NAME                = Sql.CreateParameter(cmd, "@ACTIVITY_NAME"               , "string", 100);
+			IDbDataParameter parBUSINESS_PROCESS_ID          = Sql.CreateParameter(cmd, "@BUSINESS_PROCESS_ID"         , "Guid",  16);
+			IDbDataParameter parPROCESS_USER_ID              = Sql.CreateParameter(cmd, "@PROCESS_USER_ID"             , "Guid",  16);
+			IDbDataParameter parBOOKMARK_NAME                = Sql.CreateParameter(cmd, "@BOOKMARK_NAME"               , "string", 100);
+			IDbDataParameter parPARENT_TYPE                  = Sql.CreateParameter(cmd, "@PARENT_TYPE"                 , "string",  50);
+			IDbDataParameter parPARENT_ID                    = Sql.CreateParameter(cmd, "@PARENT_ID"                   , "Guid",  16);
+			IDbDataParameter parUSER_TASK_TYPE               = Sql.CreateParameter(cmd, "@USER_TASK_TYPE"              , "string",  50);
+			IDbDataParameter parCHANGE_ASSIGNED_USER         = Sql.CreateParameter(cmd, "@CHANGE_ASSIGNED_USER"        , "bool",   1);
+			IDbDataParameter parCHANGE_ASSIGNED_TEAM_ID      = Sql.CreateParameter(cmd, "@CHANGE_ASSIGNED_TEAM_ID"     , "Guid",  16);
+			IDbDataParameter parCHANGE_PROCESS_USER          = Sql.CreateParameter(cmd, "@CHANGE_PROCESS_USER"         , "bool",   1);
+			IDbDataParameter parCHANGE_PROCESS_TEAM_ID       = Sql.CreateParameter(cmd, "@CHANGE_PROCESS_TEAM_ID"      , "Guid",  16);
+			IDbDataParameter parUSER_ASSIGNMENT_METHOD       = Sql.CreateParameter(cmd, "@USER_ASSIGNMENT_METHOD"      , "string",  50);
+			IDbDataParameter parSTATIC_ASSIGNED_USER_ID      = Sql.CreateParameter(cmd, "@STATIC_ASSIGNED_USER_ID"     , "Guid",  16);
+			IDbDataParameter parDYNAMIC_PROCESS_TEAM_ID      = Sql.CreateParameter(cmd, "@DYNAMIC_PROCESS_TEAM_ID"     , "Guid",  16);
+			IDbDataParameter parDYNAMIC_PROCESS_ROLE_ID      = Sql.CreateParameter(cmd, "@DYNAMIC_PROCESS_ROLE_ID"     , "Guid",  16);
+			IDbDataParameter parREAD_ONLY_FIELDS             = Sql.CreateParameter(cmd, "@READ_ONLY_FIELDS"            , "string", 104857600);
+			IDbDataParameter parREQUIRED_FIELDS              = Sql.CreateParameter(cmd, "@REQUIRED_FIELDS"             , "string", 104857600);
+			IDbDataParameter parDURATION_UNITS               = Sql.CreateParameter(cmd, "@DURATION_UNITS"              , "string",  50);
+			IDbDataParameter parDURATION_VALUE               = Sql.CreateParameter(cmd, "@DURATION_VALUE"              , "Int32",   4);
+			return cmd;
+		}
+		#endregion
+
+		#region spPROCESSES_NOTES_Delete
+		/// <summary>
+		/// spPROCESSES_NOTES_Delete
+		/// </summary>
+		public void spPROCESSES_NOTES_Delete(Guid gID)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_NOTES_Delete";
+							IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+							IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+							cmd.ExecuteNonQuery();
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_NOTES_Delete
+		/// <summary>
+		/// spPROCESSES_NOTES_Delete
+		/// </summary>
+		public void spPROCESSES_NOTES_Delete(Guid gID, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_NOTES_Delete";
+				IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+				IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_NOTES_Delete
+		/// <summary>
+		/// spPROCESSES_NOTES_Delete
+		/// </summary>
+		public IDbCommand cmdPROCESSES_NOTES_Delete(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_NOTES_Delete";
+			IDbDataParameter parID               = Sql.CreateParameter(cmd, "@ID"              , "Guid",  16);
+			IDbDataParameter parMODIFIED_USER_ID = Sql.CreateParameter(cmd, "@MODIFIED_USER_ID", "Guid",  16);
+			return cmd;
+		}
+		#endregion
+
+		#region spPROCESSES_NOTES_InsertOnly
+		/// <summary>
+		/// spPROCESSES_NOTES_InsertOnly
+		/// </summary>
+		public void spPROCESSES_NOTES_InsertOnly(Guid gPROCESS_ID, string sDESCRIPTION)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_NOTES_InsertOnly";
+							IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+							IDbDataParameter parPROCESS_ID       = Sql.AddParameter(cmd, "@PROCESS_ID"      , gPROCESS_ID        );
+							IDbDataParameter parDESCRIPTION      = Sql.AddParameter(cmd, "@DESCRIPTION"     , sDESCRIPTION       );
+							cmd.ExecuteNonQuery();
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_NOTES_InsertOnly
+		/// <summary>
+		/// spPROCESSES_NOTES_InsertOnly
+		/// </summary>
+		public void spPROCESSES_NOTES_InsertOnly(Guid gPROCESS_ID, string sDESCRIPTION, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_NOTES_InsertOnly";
+				IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+				IDbDataParameter parPROCESS_ID       = Sql.AddParameter(cmd, "@PROCESS_ID"      , gPROCESS_ID        );
+				IDbDataParameter parDESCRIPTION      = Sql.AddParameter(cmd, "@DESCRIPTION"     , sDESCRIPTION       );
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_NOTES_InsertOnly
+		/// <summary>
+		/// spPROCESSES_NOTES_InsertOnly
+		/// </summary>
+		public IDbCommand cmdPROCESSES_NOTES_InsertOnly(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_NOTES_InsertOnly";
+			IDbDataParameter parMODIFIED_USER_ID = Sql.CreateParameter(cmd, "@MODIFIED_USER_ID", "Guid",  16);
+			IDbDataParameter parPROCESS_ID       = Sql.CreateParameter(cmd, "@PROCESS_ID"      , "Guid",  16);
+			IDbDataParameter parDESCRIPTION      = Sql.CreateParameter(cmd, "@DESCRIPTION"     , "string", 104857600);
+			return cmd;
+		}
+		#endregion
+
+		#region spPROCESSES_OPTOUT_InsertOnly
+		/// <summary>
+		/// spPROCESSES_OPTOUT_InsertOnly
+		/// </summary>
+		public void spPROCESSES_OPTOUT_InsertOnly(ref Guid gID, Guid gBUSINESS_PROCESS_INSTANCE_ID, Guid gPARENT_ID, string sREASON)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_OPTOUT_InsertOnly";
+							IDbDataParameter parID                           = Sql.AddParameter(cmd, "@ID"                          , gID                            );
+							IDbDataParameter parMODIFIED_USER_ID             = Sql.AddParameter(cmd, "@MODIFIED_USER_ID"            ,  Security.USER_ID              );
+							IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.AddParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", gBUSINESS_PROCESS_INSTANCE_ID  );
+							IDbDataParameter parPARENT_ID                    = Sql.AddParameter(cmd, "@PARENT_ID"                   , gPARENT_ID                     );
+							IDbDataParameter parREASON                       = Sql.AddParameter(cmd, "@REASON"                      , sREASON                        );
+							parID.Direction = ParameterDirection.InputOutput;
+							cmd.ExecuteNonQuery();
+							gID = Sql.ToGuid(parID.Value);
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_OPTOUT_InsertOnly
+		/// <summary>
+		/// spPROCESSES_OPTOUT_InsertOnly
+		/// </summary>
+		public void spPROCESSES_OPTOUT_InsertOnly(ref Guid gID, Guid gBUSINESS_PROCESS_INSTANCE_ID, Guid gPARENT_ID, string sREASON, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_OPTOUT_InsertOnly";
+				IDbDataParameter parID                           = Sql.AddParameter(cmd, "@ID"                          , gID                            );
+				IDbDataParameter parMODIFIED_USER_ID             = Sql.AddParameter(cmd, "@MODIFIED_USER_ID"            ,  Security.USER_ID              );
+				IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.AddParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", gBUSINESS_PROCESS_INSTANCE_ID  );
+				IDbDataParameter parPARENT_ID                    = Sql.AddParameter(cmd, "@PARENT_ID"                   , gPARENT_ID                     );
+				IDbDataParameter parREASON                       = Sql.AddParameter(cmd, "@REASON"                      , sREASON                        );
+				parID.Direction = ParameterDirection.InputOutput;
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+				gID = Sql.ToGuid(parID.Value);
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_OPTOUT_InsertOnly
+		/// <summary>
+		/// spPROCESSES_OPTOUT_InsertOnly
+		/// </summary>
+		public IDbCommand cmdPROCESSES_OPTOUT_InsertOnly(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_OPTOUT_InsertOnly";
+			IDbDataParameter parID                           = Sql.CreateParameter(cmd, "@ID"                          , "Guid",  16);
+			IDbDataParameter parMODIFIED_USER_ID             = Sql.CreateParameter(cmd, "@MODIFIED_USER_ID"            , "Guid",  16);
+			IDbDataParameter parBUSINESS_PROCESS_INSTANCE_ID = Sql.CreateParameter(cmd, "@BUSINESS_PROCESS_INSTANCE_ID", "Guid",  16);
+			IDbDataParameter parPARENT_ID                    = Sql.CreateParameter(cmd, "@PARENT_ID"                   , "Guid",  16);
+			IDbDataParameter parREASON                       = Sql.CreateParameter(cmd, "@REASON"                      , "string", 104857600);
+			parID.Direction = ParameterDirection.InputOutput;
+			return cmd;
+		}
+		#endregion
+
+		#region spPROCESSES_OPTOUT_Update
+		/// <summary>
+		/// spPROCESSES_OPTOUT_Update
+		/// </summary>
+		public void spPROCESSES_OPTOUT_Update(ref Guid gID, string sREASON)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_OPTOUT_Update";
+							IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+							IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+							IDbDataParameter parREASON           = Sql.AddParameter(cmd, "@REASON"          , sREASON            );
+							parID.Direction = ParameterDirection.InputOutput;
+							cmd.ExecuteNonQuery();
+							gID = Sql.ToGuid(parID.Value);
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_OPTOUT_Update
+		/// <summary>
+		/// spPROCESSES_OPTOUT_Update
+		/// </summary>
+		public void spPROCESSES_OPTOUT_Update(ref Guid gID, string sREASON, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_OPTOUT_Update";
+				IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+				IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+				IDbDataParameter parREASON           = Sql.AddParameter(cmd, "@REASON"          , sREASON            );
+				parID.Direction = ParameterDirection.InputOutput;
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+				gID = Sql.ToGuid(parID.Value);
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_OPTOUT_Update
+		/// <summary>
+		/// spPROCESSES_OPTOUT_Update
+		/// </summary>
+		public IDbCommand cmdPROCESSES_OPTOUT_Update(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_OPTOUT_Update";
+			IDbDataParameter parID               = Sql.CreateParameter(cmd, "@ID"              , "Guid",  16);
+			IDbDataParameter parMODIFIED_USER_ID = Sql.CreateParameter(cmd, "@MODIFIED_USER_ID", "Guid",  16);
+			IDbDataParameter parREASON           = Sql.CreateParameter(cmd, "@REASON"          , "string", 104857600);
+			parID.Direction = ParameterDirection.InputOutput;
+			return cmd;
+		}
+		#endregion
+
+		#region spPROCESSES_UpdateApproval
+		/// <summary>
+		/// spPROCESSES_UpdateApproval
+		/// </summary>
+		public void spPROCESSES_UpdateApproval(Guid gID, Guid gAPPROVAL_USER_ID, string sAPPROVAL_RESPONSE)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_UpdateApproval";
+							IDbDataParameter parID                = Sql.AddParameter(cmd, "@ID"               , gID                 );
+							IDbDataParameter parMODIFIED_USER_ID  = Sql.AddParameter(cmd, "@MODIFIED_USER_ID" ,  Security.USER_ID   );
+							IDbDataParameter parAPPROVAL_USER_ID  = Sql.AddParameter(cmd, "@APPROVAL_USER_ID" , gAPPROVAL_USER_ID   );
+							IDbDataParameter parAPPROVAL_RESPONSE = Sql.AddParameter(cmd, "@APPROVAL_RESPONSE", sAPPROVAL_RESPONSE  , 100);
+							cmd.ExecuteNonQuery();
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_UpdateApproval
+		/// <summary>
+		/// spPROCESSES_UpdateApproval
+		/// </summary>
+		public void spPROCESSES_UpdateApproval(Guid gID, Guid gAPPROVAL_USER_ID, string sAPPROVAL_RESPONSE, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_UpdateApproval";
+				IDbDataParameter parID                = Sql.AddParameter(cmd, "@ID"               , gID                 );
+				IDbDataParameter parMODIFIED_USER_ID  = Sql.AddParameter(cmd, "@MODIFIED_USER_ID" ,  Security.USER_ID   );
+				IDbDataParameter parAPPROVAL_USER_ID  = Sql.AddParameter(cmd, "@APPROVAL_USER_ID" , gAPPROVAL_USER_ID   );
+				IDbDataParameter parAPPROVAL_RESPONSE = Sql.AddParameter(cmd, "@APPROVAL_RESPONSE", sAPPROVAL_RESPONSE  , 100);
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_UpdateApproval
+		/// <summary>
+		/// spPROCESSES_UpdateApproval
+		/// </summary>
+		public IDbCommand cmdPROCESSES_UpdateApproval(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_UpdateApproval";
+			IDbDataParameter parID                = Sql.CreateParameter(cmd, "@ID"               , "Guid",  16);
+			IDbDataParameter parMODIFIED_USER_ID  = Sql.CreateParameter(cmd, "@MODIFIED_USER_ID" , "Guid",  16);
+			IDbDataParameter parAPPROVAL_USER_ID  = Sql.CreateParameter(cmd, "@APPROVAL_USER_ID" , "Guid",  16);
+			IDbDataParameter parAPPROVAL_RESPONSE = Sql.CreateParameter(cmd, "@APPROVAL_RESPONSE", "string", 100);
+			return cmd;
+		}
+		#endregion
+
+		#region spPROCESSES_UpdateStatus
+		/// <summary>
+		/// spPROCESSES_UpdateStatus
+		/// </summary>
+		public void spPROCESSES_UpdateStatus(Guid gID, string sSTATUS)
+		{
+			DbProviderFactory dbf = DbProviderFactories.GetFactory();
+			using ( IDbConnection con = dbf.CreateConnection() )
+			{
+				con.Open();
+				using ( IDbTransaction trn = Sql.BeginTransaction(con) )
+				{
+					try
+					{
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.Transaction = trn;
+							cmd.CommandType = CommandType.StoredProcedure;
+							cmd.CommandText = "spPROCESSES_UpdateStatus";
+							IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+							IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+							IDbDataParameter parSTATUS           = Sql.AddParameter(cmd, "@STATUS"          , sSTATUS            ,  25);
+							cmd.ExecuteNonQuery();
+						}
+						trn.Commit();
+					}
+					catch
+					{
+						trn.Rollback();
+						throw;
+					}
+				}
+			}
+		}
+		#endregion
+
+		#region spPROCESSES_UpdateStatus
+		/// <summary>
+		/// spPROCESSES_UpdateStatus
+		/// </summary>
+		public void spPROCESSES_UpdateStatus(Guid gID, string sSTATUS, IDbTransaction trn)
+		{
+			IDbConnection con = trn.Connection;
+			using ( IDbCommand cmd = con.CreateCommand() )
+			{
+				cmd.Transaction = trn;
+				cmd.CommandType = CommandType.StoredProcedure;
+				cmd.CommandText = "spPROCESSES_UpdateStatus";
+				IDbDataParameter parID               = Sql.AddParameter(cmd, "@ID"              , gID                );
+				IDbDataParameter parMODIFIED_USER_ID = Sql.AddParameter(cmd, "@MODIFIED_USER_ID",  Security.USER_ID  );
+				IDbDataParameter parSTATUS           = Sql.AddParameter(cmd, "@STATUS"          , sSTATUS            ,  25);
+				Sql.Trace(cmd);
+				cmd.ExecuteNonQuery();
+			}
+		}
+		#endregion
+
+		#region cmdPROCESSES_UpdateStatus
+		/// <summary>
+		/// spPROCESSES_UpdateStatus
+		/// </summary>
+		public IDbCommand cmdPROCESSES_UpdateStatus(IDbConnection con)
+		{
+			IDbCommand cmd = con.CreateCommand();
+			cmd.CommandType = CommandType.StoredProcedure;
+			cmd.CommandText = "spPROCESSES_UpdateStatus";
+			IDbDataParameter parID               = Sql.CreateParameter(cmd, "@ID"              , "Guid",  16);
+			IDbDataParameter parMODIFIED_USER_ID = Sql.CreateParameter(cmd, "@MODIFIED_USER_ID", "Guid",  16);
+			IDbDataParameter parSTATUS           = Sql.CreateParameter(cmd, "@STATUS"          , "string",  25);
+			return cmd;
+		}
+		#endregion
+
 		#region Factory
 		/// <summary>
 		/// Factory
@@ -29040,6 +30004,18 @@ namespace SplendidCRM
 				case "SPVERSIONS_UPDATE"                     :  cmd = cmdVERSIONS_Update                     (con);  break;
 				case "SPWORKFLOW_EVENTS_DELETE"              :  cmd = cmdWORKFLOW_EVENTS_Delete              (con);  break;
 				case "SPWORKFLOW_EVENTS_PROCESSALL"          :  cmd = cmdWORKFLOW_EVENTS_ProcessAll          (con);  break;
+				case "SPPROCESSES_CHANGEASSIGNEDUSER"        :  cmd = cmdPROCESSES_ChangeAssignedUser        (con);  break;
+				case "SPPROCESSES_CHANGEPROCESSUSER"         :  cmd = cmdPROCESSES_ChangeProcessUser         (con);  break;
+				case "SPPROCESSES_ENDEVENTGATEWAY"           :  cmd = cmdPROCESSES_EndEventGateway           (con);  break;
+				case "SPPROCESSES_HISTORY_DELETE"            :  cmd = cmdPROCESSES_HISTORY_Delete            (con);  break;
+				case "SPPROCESSES_HISTORY_INSERTONLY"        :  cmd = cmdPROCESSES_HISTORY_InsertOnly        (con);  break;
+				case "SPPROCESSES_INSERTONLY"                :  cmd = cmdPROCESSES_InsertOnly                (con);  break;
+				case "SPPROCESSES_NOTES_DELETE"              :  cmd = cmdPROCESSES_NOTES_Delete              (con);  break;
+				case "SPPROCESSES_NOTES_INSERTONLY"          :  cmd = cmdPROCESSES_NOTES_InsertOnly          (con);  break;
+				case "SPPROCESSES_OPTOUT_INSERTONLY"         :  cmd = cmdPROCESSES_OPTOUT_InsertOnly         (con);  break;
+				case "SPPROCESSES_OPTOUT_UPDATE"             :  cmd = cmdPROCESSES_OPTOUT_Update             (con);  break;
+				case "SPPROCESSES_UPDATEAPPROVAL"            :  cmd = cmdPROCESSES_UpdateApproval            (con);  break;
+				case "SPPROCESSES_UPDATESTATUS"              :  cmd = cmdPROCESSES_UpdateStatus              (con);  break;
 				// 11/26/2021 Paul.  In order to support dynamically created modules in the React client, we need to load the procedures dynamically. 
 				default:  cmd = this.DynamicFactory(con, sProcedureName);  break;
 			}
@@ -29058,4 +30034,3 @@ namespace SplendidCRM
 
 	}
 }
-

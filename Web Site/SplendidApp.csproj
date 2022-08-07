@@ -22,8 +22,8 @@
     <AssemblyVersion Condition=" '$(VersionSuffix)' != '' ">$(VersionSuffix)</AssemblyVersion>
     <Version Condition=" '$(VersionSuffix)' == '' ">0.0.1.0</Version>
     <Version Condition=" '$(VersionSuffix)' != '' ">$(VersionSuffix)</Version>
-    <AssemblyVersion>1.1.22132.0346</AssemblyVersion>
-    <Version>1.1.22132.0347</Version>
+    <AssemblyVersion>1.2.22132.0346</AssemblyVersion>
+    <Version>1.2.22132.0347</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -44,11 +44,15 @@
 
   <ItemGroup>
     <!-- Don't publish the SPA source files, but do show them in the project files list -->
+    <Compile Remove="Angular\dist\**" />
     <Compile Remove="React\**" />
     <Content Remove="$(SpaRoot)**" />
+    <Content Remove="Angular\dist\**" />
     <Content Remove="React\**" />
+    <EmbeddedResource Remove="Angular\dist\**" />
     <EmbeddedResource Remove="React\**" />
     <None Remove="$(SpaRoot)**" />
+    <None Remove="Angular\dist\**" />
     <None Remove="React\**" />
     <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
     <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)platforms\**" />

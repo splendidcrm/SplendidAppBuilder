@@ -205,14 +205,22 @@ namespace SplendidApp
 			app.Use((context, next) =>
 			{
 				string sRequestPath = context.Request.Path.Value;
-				//Console.WriteLine("Request: " + sRequestPath);
-				//Debug.WriteLine("Request: " + sRequestPath);
+				Console.WriteLine("Request: " + sRequestPath);
+				Debug.WriteLine("Request: " + sRequestPath);
 				if ( !sRequestPath.Contains(".") )
 				{
 					// 12/29/2021 Paul.  SpaDefaultPageMiddleware.cs: Rewrite all requests to the default page
 					// This is not working.  Still get page not found for /Home
 					// https://weblog.west-wind.com/posts/2020/Mar/13/Back-to-Basics-Rewriting-a-URL-in-ASPNET-Core
-					context.Request.Path = "/";
+					// 07/31/2022 Paul.  Enable Angular UI. 
+					if ( sRequestPath.Contains("/Angular") )
+					{
+						context.Request.Path = "/Angular";
+					}
+					else
+					{
+						context.Request.Path = "/";
+					}
 				}
 				return next();
 			});
@@ -228,6 +236,11 @@ namespace SplendidApp
 			{
 				FileProvider = new PhysicalFileProvider(Path.Combine(env.ContentRootPath, "App_Themes")),
 				RequestPath  = "/App_Themes"
+			});  // App_Themes
+			app.UseStaticFiles(new StaticFileOptions
+			{
+				FileProvider = new PhysicalFileProvider(Path.Combine(env.ContentRootPath, "Angular/dist")),
+				RequestPath  = "/Angular/dist"
 			});  // App_Themes
 			/*
 			app.UseStaticFiles(new StaticFileOptions
@@ -306,4 +319,3 @@ namespace SplendidApp
 		}
 	}
 }
-
