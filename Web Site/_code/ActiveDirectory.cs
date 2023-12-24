@@ -15,33 +15,15 @@
  * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *********************************************************************************************************************/
 using System;
-using System.IO;
-using System.Net;
 using System.Xml;
 using System.Web;
-using System.Text;
 using System.Data;
-using System.Data.Common;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 
+using Microsoft.Exchange.WebServices.Data;
 using System.Runtime.Serialization;
-using System.Runtime.Serialization.Json;
-using System.Security.Cryptography.X509Certificates;
-using System.Linq;
-// Install-Package System.IdentityModel.Tokens.ValidatingIssuerNameRegistry
-// ValidatingIssuerNameRegistry
-// http://www.cloudidentity.com/blog/2013/02/08/multitenant-sts-and-token-validation-4/
 
 using Microsoft.AspNetCore.Http;
-using Microsoft.IdentityModel.Protocols;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using Microsoft.IdentityModel.Logging;
-using System.Threading.Tasks;
-using System.Globalization;
 
 namespace SplendidCRM
 {
@@ -153,18 +135,20 @@ namespace SplendidCRM
 		}
 
 		// 05/02/2017 Paul.  Need a separate flag for the mobile client. 
-		public async Task<Guid> AzureValidateJwt(string sToken, bool bMobileClient)
+		public Guid AzureValidateJwt(string sToken, bool bMobileClient, ref string sError)
 		{
 			Guid gUSER_ID       = Guid.Empty;
 			Guid gUSER_LOGIN_ID = Guid.Empty;
-			string sError = String.Empty;
 			try
 			{
 				//string sAadTenantDomain     = Sql.ToString(Application["CONFIG.Azure.SingleSignOn.AadTenantDomain"   ]);
-				// https://stackoverflow.com/questions/53966951/asp-net-core-azureadjwtbearer-issuer-validation-failure/53973136
-				string sValidIssuer         = Sql.ToString(Application["CONFIG.Azure.SingleSignOn.ValidIssuer"       ]);
 				string sAadClientId         = Sql.ToString(Application["CONFIG.Azure.SingleSignOn.AadClientId"       ]);
-				string sAadTenantId         = Sql.ToString(Application["CONFIG.Azure.SingleSignOn.AadTenantId"       ]);
+				//string sRealm               = Sql.ToString(Application["CONFIG.Azure.SingleSignOn.Realm"             ]);
+				string sFederationMetadata  = Sql.ToString(Application["CONFIG.Azure.SingleSignOn.FederationMetadata"]);
+				//string stsDiscoveryEndpoint = "https://login.microsoftonline.com/" + sAadTenantDomain + "/.well-known/openid-configuration";
+				// 05/03/2017 Paul.  Instead of validating against the resource, validate against the clientId as it is easier. 
+				//string sResourceUrl = Request.Url.ToString();
+				//sResourceUrl = sResourceUrl.Substring(0, sResourceUrl.Length - "Rest.svc/Login".Length);
 				// 05/02/2017 Paul.  Need a separate flag for the mobile client. 
 				// 12/05/2018 Paul.  Allow authorization by USER_NAME instead of by EMAIL1. 
 				bool   bAuthByUserName     = Sql.ToBoolean(Application["CONFIG.Azure.SingleSignOn.AuthByUserName"]);
@@ -173,28 +157,28 @@ namespace SplendidCRM
 					// 05/03/2017 Paul.  As we are using the MobileClientId to validate the token, we must also use it as the resourceUrl when acquiring the token. 
 					sAadClientId   = Sql.ToString(Application["CONFIG.Azure.SingleSignOn.MobileClientId"  ]);
 				}
-				if ( Sql.IsEmptyString(sValidIssuer) )
+
+				// 02/14/2022 Paul.  Use the new metadata serializer. 
+				// https://www.nuget.org/packages/Microsoft.IdentityModel.Protocols.WsFederation/
+				Microsoft.IdentityModel.Protocols.WsFederation.WsFederationMetadataSerializer serializer = new Microsoft.IdentityModel.Protocols.WsFederation.WsFederationMetadataSerializer();
+				Microsoft.IdentityModel.Protocols.WsFederation.WsFederationConfiguration metadata = Application["Azure.FederationMetadata"] as Microsoft.IdentityModel.Protocols.WsFederation.WsFederationConfiguration;
+				if ( metadata == null )
 				{
-					sValidIssuer = "https://sts.windows.net/{0}/";
+					metadata = serializer.ReadMetadata(XmlReader.Create(sFederationMetadata));
+					Application["Azure.FederationMetadata"] = metadata;
 				}
-#if DEBUG
-				IdentityModelEventSource.ShowPII = true;
-#endif
-				// https://www.c-sharpcorner.com/article/how-to-validate-azure-ad-token-using-console-application/
-				String sDiscoveryEndpoint = String.Format(CultureInfo.InvariantCulture, "https://login.microsoftonline.com/{0}/.well-known/openid-configuration", sAadTenantId);
-				ConfigurationManager<OpenIdConnectConfiguration> configManager = new ConfigurationManager<OpenIdConnectConfiguration>(sDiscoveryEndpoint, new OpenIdConnectConfigurationRetriever());  
-				OpenIdConnectConfiguration config = await configManager.GetConfigurationAsync();
-  
-				JwtSecurityTokenHandler tokenHandler = new JwtSecurityTokenHandler();
-  				TokenValidationParameters validationParameters = new TokenValidationParameters
+				
+				// 02/14/2022 Paul.  Update System.IdentityModel.Tokens.Jwt to support Apple Signin. 
+				// https://www.nuget.org/packages/System.IdentityModel.Tokens.Jwt/
+				System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler tokenHandler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+				Microsoft.IdentityModel.Tokens.TokenValidationParameters validationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
 				{
-					ValidAudience     = sAadClientId,
-					ValidIssuer       = String.Format(CultureInfo.InvariantCulture, sValidIssuer, sAadTenantId),
-					IssuerSigningKeys = config.SigningKeys,
-					ValidateLifetime  = false,
+					ValidIssuer         = metadata.Issuer,
+					IssuerSigningKeys   = metadata.SigningKeys,
+					ValidAudience       = sAadClientId
 				};
- 
-				SecurityToken validatedToken = (SecurityToken) new JwtSecurityToken();
+
+				Microsoft.IdentityModel.Tokens.SecurityToken validatedToken = null;
 				// Throws an Exception as the token is invalid (expired, invalid-formatted, etc.)
 				System.Security.Claims.ClaimsPrincipal identity = tokenHandler.ValidateToken(sToken, validationParameters, out validatedToken);
 				if ( identity != null )
@@ -244,7 +228,7 @@ namespace SplendidCRM
 						sEMAIL1 = sUSER_NAME;
 					if ( !Sql.IsEmptyString(sEMAIL1) )
 					{
-						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						SplendidCRM.DbProviderFactory dbf = DbProviderFactories.GetFactory();
 						using ( IDbConnection con = dbf.CreateConnection() )
 						{
 							con.Open();
@@ -269,6 +253,10 @@ namespace SplendidCRM
 								gUSER_ID = Sql.ToGuid(cmd.ExecuteScalar());
 								if ( Sql.IsEmptyGuid(gUSER_ID) )
 								{
+									// 01/13/2017 Paul.  Cannot log an unknown user. 
+									//SqlProcs.spUSERS_LOGINS_InsertOnly(ref gUSER_LOGIN_ID, Guid.Empty, sEMAIL1, "Azure AD", "Failed", Session.SessionID, Request.UserHostName, Request.Host.Host, Request.Path, Request.AppRelativeCurrentExecutionFilePath, Request.UserAgent);
+									// 01/13/2017 Paul.  Cannot lock-out an unknown user. 
+									//SplendidInit.LoginTracking(sEMAIL1, false);
 									sError = "SECURITY: failed attempted login for " + sEMAIL1 + " using Azure AD/REST API";
 									SplendidError.SystemMessage("Warning", new StackTrace(true).GetFrame(0), sError);
 								}
@@ -290,12 +278,12 @@ namespace SplendidCRM
 			catch(Exception ex)
 			{
 				string sUSER_NAME = "(Unknown Azure AD)";
+				// 01/13/2017 Paul.  Cannot log an unknown user. 
+				//SqlProcs.spUSERS_LOGINS_InsertOnly(ref gUSER_LOGIN_ID, Guid.Empty, sUSER_NAME, "Azure AD", "Failed", Session.SessionID, Request.UserHostName, Request.Host.Host, Request.Path, Request.AppRelativeCurrentExecutionFilePath, Request.UserAgent);
+				// 01/13/2017 Paul.  Cannot lock-out an unknown user. 
+				//SplendidInit.LoginTracking(sUSER_NAME, false);
 				sError = "SECURITY: failed attempted login for " + sUSER_NAME + " using Azure AD/REST API. " + ex.Message;
 				SplendidError.SystemMessage("Warning", new StackTrace(true).GetFrame(0), sError);
-			}
-			if ( !Sql.IsEmptyString(sError) )
-			{
-				throw(new Exception(sError));
 			}
 			return gUSER_ID;
 		}
@@ -316,11 +304,10 @@ namespace SplendidCRM
 		}
 
 		// 05/02/2017 Paul.  Need a separate flag for the mobile client. 
-		public async Task<Guid> FederationServicesValidateJwt(string sToken, bool bMobileClient)
+		public Guid FederationServicesValidateJwt(string sToken, bool bMobileClient, ref string sError)
 		{
 			Guid gUSER_ID       = Guid.Empty;
 			Guid gUSER_LOGIN_ID = Guid.Empty;
-			string sError       = String.Empty;
 			try
 			{
 				//string sRealm      = Sql.ToString(Application["CONFIG.ADFS.SingleSignOn.Realm"     ]);
@@ -333,25 +320,57 @@ namespace SplendidCRM
 				string sMobileClientId = Sql.ToString(Application["CONFIG.ADFS.SingleSignOn.MobileClientId"  ]);
 				if ( !sAuthority.EndsWith("/") )
 					sAuthority += "/";
+				string sFederationMetadata  = sAuthority + "FederationMetadata/2007-06/FederationMetadata.xml";
 
-#if DEBUG
-				IdentityModelEventSource.ShowPII = true;
-#endif
-				// https://docs.microsoft.com/en-us/windows-server/identity/ad-fs/development/enabling-openid-connect-with-ad-fs
-				String sDiscoveryEndpoint = sAuthority + "adfs/.well-known/openid-configuration";
-				ConfigurationManager<OpenIdConnectConfiguration> configManager = new ConfigurationManager<OpenIdConnectConfiguration>(sDiscoveryEndpoint, new OpenIdConnectConfigurationRetriever());
-				OpenIdConnectConfiguration config = await configManager.GetConfigurationAsync();
-  
-				JwtSecurityTokenHandler tokenHandler = new JwtSecurityTokenHandler();
-  				TokenValidationParameters validationParameters = new TokenValidationParameters
+				// 02/14/2022 Paul.  Use the new metadata serializer. 
+				// https://www.nuget.org/packages/Microsoft.IdentityModel.Protocols.WsFederation/
+				Microsoft.IdentityModel.Protocols.WsFederation.WsFederationMetadataSerializer serializer = new Microsoft.IdentityModel.Protocols.WsFederation.WsFederationMetadataSerializer();
+				Microsoft.IdentityModel.Protocols.WsFederation.WsFederationConfiguration metadata = Application["ADFS.FederationMetadata"] as Microsoft.IdentityModel.Protocols.WsFederation.WsFederationConfiguration;
+				if ( metadata == null )
 				{
-					ValidAudience     = sClientId,
-					ValidIssuer       = sAuthority + "adfs",
-					IssuerSigningKeys = config.SigningKeys,
-					ValidateLifetime  = false,
+					metadata = serializer.ReadMetadata(XmlReader.Create(sFederationMetadata));
+					Application["ADFS.FederationMetadata"] = metadata;
+				}
+
+				// 12/25/2018 Paul.  Not sure why server is using http instead of https.  
+				// IDX10205: Issuer validation failed. Issuer: 'http://adfs4.splendidcrm.com/adfs/services/trust'. Did not match: validationParameters.ValidIssuer: 'https://adfs4.splendidcrm.com/adfs/services/trust' or validationParameters.ValidIssuers: 'null'.
+				// IDX10204: Unable to validate issuer. validationParameters.ValidIssuer is null or whitespace AND validationParameters.ValidIssuers is null.
+				StringList arrValidIssuers = new StringList();
+				arrValidIssuers.Add(sAuthority + "adfs");
+				arrValidIssuers.Add(sAuthority + "adfs/services/trust");
+				arrValidIssuers.Add(sAuthority.Replace("https:", "http:") + "adfs/services/trust");
+				// IDX10214: Audience validation failed. Audiences: 'urn:microsoft:userinfo'. Did not match:  validationParameters.ValidAudience: 'microsoft:identityserver:86a54b29-a28e-4bcb-9477-07e25a41ee24' or validationParameters.ValidAudiences: 'null'
+				StringList arrAudiences = new StringList();
+				arrAudiences.Add(sClientId);
+				arrAudiences.Add("microsoft:identityserver:" + sClientId);
+				// 01/08/2018 Paul.  ADFS 3.0 will require us to register both client and mobile as valid audiences. 
+				if ( sClientId != sMobileClientId && !Sql.IsEmptyString(sMobileClientId) )
+				{
+					arrAudiences.Add(sMobileClientId);
+					arrAudiences.Add("microsoft:identityserver:" + sMobileClientId);
+				}
+				arrAudiences.Add("urn:microsoft:userinfo");
+				// 02/14/2019 Paul.  Use Grant-AdfsApplicationPermission to grant the plug-in access to the resource. 
+				// https://community.dynamics.com/crm/f/117/t/246239
+				// Grant-AdfsApplicationPermission -ClientRoleIdentifier "0dff791c-21b4-49cd-b3be-e7c37d29d6c0" -ServerRoleIdentifier "https://SplendidPlugin"
+				// 02/14/2019 Paul.  https://SplendidPlugin is hardcoded to the Outlook and Word plug-ins. 
+				arrAudiences.Add("https://SplendidPlugin");
+				// 02/14/2019 Paul.  Lets include survey and mobile. 
+				arrAudiences.Add("https://SplendidMobile");
+				arrAudiences.Add("https://auth.expo.io/@splendidcrm/splendidsurvey");
+				// 02/14/2022 Paul.  Update System.IdentityModel.Tokens.Jwt to support Apple Signin. 
+				// https://www.nuget.org/packages/System.IdentityModel.Tokens.Jwt/
+				System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler tokenHandler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+				Microsoft.IdentityModel.Tokens.TokenValidationParameters validationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+				{
+					//ValidIssuer         = sAuthority + "adfs",
+					ValidIssuers        = arrValidIssuers,
+					ValidAudiences      = arrAudiences,
+					IssuerSigningKeys   = metadata.SigningKeys
 				};
- 
-				SecurityToken validatedToken = (SecurityToken) new JwtSecurityToken();
+
+				Microsoft.IdentityModel.Tokens.SecurityToken validatedToken = null;
+				//validatedToken = tokenHandler.ReadToken(sToken);
 				// Throws an Exception as the token is invalid (expired, invalid-formatted, etc.)
 				System.Security.Claims.ClaimsPrincipal identity = tokenHandler.ValidateToken(sToken, validationParameters, out validatedToken);
 				if ( identity != null )
@@ -362,7 +381,7 @@ namespace SplendidCRM
 					string sEMAIL1     = String.Empty;
 					foreach ( System.Security.Claims.Claim claim in identity.Claims )
 					{
-						Debug.WriteLine(claim.Type + " = " + claim.Value);
+						//Debug.WriteLine(claim.Type + " = " + claim.Value);
 						// http://schemas.microsoft.com/ws/2008/06/identity/claims/authenticationinstant = 1484346928
 						// http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier = zwkv1IHDGSe1FDyDrc6LO2+XxDD0LWfs1SL35ZdOxF0=
 						// http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn = paulrony@merchantware.local
@@ -389,7 +408,7 @@ namespace SplendidCRM
 						sUSER_NAME   = arrUserName[0];
 					if ( !Sql.IsEmptyString(sUSER_NAME) )
 					{
-						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						SplendidCRM.DbProviderFactory dbf = DbProviderFactories.GetFactory();
 						using ( IDbConnection con = dbf.CreateConnection() )
 						{
 							con.Open();
@@ -404,6 +423,10 @@ namespace SplendidCRM
 								gUSER_ID = Sql.ToGuid(cmd.ExecuteScalar());
 								if ( Sql.IsEmptyGuid(gUSER_ID) )
 								{
+									// 01/13/2017 Paul.  Cannot log an unknown user. 
+									//SqlProcs.spUSERS_LOGINS_InsertOnly(ref gUSER_LOGIN_ID, Guid.Empty, sEMAIL1, "Azure AD", "Failed", Session.SessionID, Request.UserHostName, Request.Host.Host, Request.Path, Request.AppRelativeCurrentExecutionFilePath, Request.UserAgent);
+									// 01/13/2017 Paul.  Cannot lock-out an unknown user. 
+									//SplendidInit.LoginTracking(sEMAIL1, false);
 									sError = "SECURITY: failed attempted login for " + sUSER_NAME + " using ADFS/REST API.";
 									SplendidError.SystemMessage("Warning", new StackTrace(true).GetFrame(0), sError);
 								}
@@ -425,6 +448,10 @@ namespace SplendidCRM
 			catch(Exception ex)
 			{
 				string sUSER_NAME = "(Unknown ADFS)";
+				// 01/13/2017 Paul.  Cannot log an unknown user. 
+				//SqlProcs.spUSERS_LOGINS_InsertOnly(ref gUSER_LOGIN_ID, Guid.Empty, sUSER_NAME, "Azure AD", "Failed", Session.SessionID, Request.UserHostName, Request.Host.Host, Request.Path, Request.AppRelativeCurrentExecutionFilePath, Request.UserAgent);
+				// 01/13/2017 Paul.  Cannot lock-out an unknown user. 
+				//SplendidInit.LoginTracking(sUSER_NAME, false);
 				sError = "SECURITY: failed attempted login for " + sUSER_NAME + " using ADFS/REST API. " + ex.Message;
 				SplendidError.SystemMessage("Warning", new StackTrace(true).GetFrame(0), sError);
 			}
@@ -432,4 +459,3 @@ namespace SplendidCRM
 		}
 	}
 }
-

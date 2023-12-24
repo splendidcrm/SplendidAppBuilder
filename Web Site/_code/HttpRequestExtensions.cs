@@ -24,7 +24,7 @@ using Microsoft.AspNetCore.Mvc.Formatters;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace SplendidApp
+namespace SplendidCRM
 {
 	// https://weblog.west-wind.com/posts/2017/Sep/14/Accepting-Raw-Request-Body-Content-in-ASPNET-Core-API-Controllers?Page=2#Raw-String
 	// 12/25/2021 Paul.  The React Client posts data using application/octet-stream as that is what ASP.NET 4.8 requires. 
@@ -129,5 +129,4 @@ namespace SplendidApp
 		}
 	}
 }
-
 

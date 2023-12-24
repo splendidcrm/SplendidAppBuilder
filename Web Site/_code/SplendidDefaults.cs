@@ -16,16 +16,7 @@
  *********************************************************************************************************************/
 using System;
 using System.Data;
-using System.Data.Common;
-using System.Web;
 using System.Threading;
-using System.Globalization;
-/*
-using System.Web.SessionState;
-using System.Text;
-using System.Xml;
-using System.Diagnostics;
-*/
 
 namespace SplendidCRM
 {
@@ -53,7 +44,7 @@ namespace SplendidCRM
 #if false
 				try
 				{
-					DataView vwLanguages = new DataView(SplendidCache.Languages(Application));
+					DataView vwLanguages = new DataView(SplendidCache.Languages());
 					// 05/20/2008 Paul.  Normalize culture before lookup. 
 					vwLanguages.RowFilter = "NAME = '" + L10N.NormalizeCulture(sCulture) +"'";
 					if ( vwLanguages.Count > 0 )
@@ -241,5 +232,4 @@ namespace SplendidCRM
 
 	}
 }
-
 

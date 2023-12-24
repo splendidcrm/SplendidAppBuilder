@@ -28,11 +28,13 @@ using System.CodeDom.Compiler;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
+using static SplendidCRM.SqlBuild;
 
 namespace SplendidCRM
 {
@@ -54,15 +56,16 @@ namespace SplendidCRM
 		private HttpSessionState     Session            ;
 		private Security             Security           ;
 		private Sql                  Sql                ;
-		private L10N                 L10n               ;
 		private SplendidDefaults     SplendidDefaults   = new SplendidDefaults();
 		private SqlProcs             SqlProcs           ;
 		private SplendidError        SplendidError      ;
 		private SplendidCache        SplendidCache      ;
 		private Currency             Currency           = new Currency();
+		private CurrencyUtils        CurrencyUtils      ;
+		private XmlUtil              XmlUtil            ;
 		private Crm.Password         Password           = new Crm.Password();
 
-		public SplendidInit(IWebHostEnvironment hostingEnvironment, IConfiguration configuration, IMemoryCache memoryCache, IHttpContextAccessor httpContextAccessor, HttpSessionState Session, Security Security, Sql Sql, SplendidCache SplendidCache, SplendidError SplendidError)
+		public SplendidInit(IWebHostEnvironment hostingEnvironment, IConfiguration configuration, IMemoryCache memoryCache, IHttpContextAccessor httpContextAccessor, HttpSessionState Session, Security Security, Sql Sql, SqlProcs SqlProcs, SplendidCache SplendidCache, SplendidError SplendidError, CurrencyUtils CurrencyUtils, XmlUtil XmlUtil)
 		{
 			this.hostingEnvironment  = hostingEnvironment ;
 			this.configuration       = configuration      ;
@@ -71,13 +74,33 @@ namespace SplendidCRM
 			this.Session             = Session            ;
 			this.Security            = Security           ;
 			this.Sql                 = Sql                ;
-			this.L10n                = new L10N(Sql.ToString(Session["USER_LANG"]));
-			this.SqlProcs            = new SqlProcs(Security, Sql);
+			this.SqlProcs            = SqlProcs           ;
 			this.SplendidCache       = SplendidCache      ;
 			this.SplendidError       = SplendidError      ;
+			this.CurrencyUtils       = CurrencyUtils      ;
+			this.XmlUtil             = XmlUtil            ;
 		}
 
-		private void InitAppURLs()
+		public async Task InitDatabase()
+		{
+			if ( !Sql.ToBoolean(Application["SplendidInit.InitApp"]) && !MaintenanceMiddleware.MaintenanceMode )
+			{
+				InitAppURLs();
+				// 06/18/2023 Paul.  SqlBuild requires SplendidInit, so it cannot be dependency injected.
+				SqlBuild SqlBuild = new SqlBuild(hostingEnvironment, SplendidError, this);
+				await SqlBuild.BuildDatabase();
+				lock ( this )
+				{
+					if ( !MaintenanceMiddleware.MaintenanceMode )
+					{
+						InitApp();
+						Application["SplendidInit.InitApp"] = true;
+					}
+				}
+			}
+		}
+
+		public void InitAppURLs()
 		{
 			if ( Sql.IsEmptyString(Application["imageURL"]) )
 			{
@@ -154,7 +177,7 @@ namespace SplendidCRM
 								string sNAME         = Sql.ToString(rdr["NAME"        ]);
 								string sDISPLAY_NAME = Sql.ToString(rdr["DISPLAY_NAME"]);
 								// 01/20/2009 Paul.  We need to pass the Application to the Term function. 
-								L10n.SetTerm(sLANG, sMODULE_NAME, sNAME, sDISPLAY_NAME);
+								L10N.SetTerm(Application, sLANG, sMODULE_NAME, sNAME, sDISPLAY_NAME);
 							}
 						}
 					}
@@ -188,7 +211,7 @@ namespace SplendidCRM
 								string sLIST_NAME    = Sql.ToString(rdr["LIST_NAME"   ]);
 								string sDISPLAY_NAME = Sql.ToString(rdr["DISPLAY_NAME"]);
 								// 01/20/2009 Paul.  We need to pass the Application to the Term function. 
-								L10n.SetTerm(sLANG, sMODULE_NAME, sLIST_NAME, sNAME, sDISPLAY_NAME);
+								L10N.SetTerm(Application, sLANG, sMODULE_NAME, sLIST_NAME, sNAME, sDISPLAY_NAME);
 							}
 						}
 					}
@@ -214,7 +237,7 @@ namespace SplendidCRM
 								string sMODULE_NAME        = Sql.ToString(rdr["MODULE_NAME"       ]);
 								string sLIST_NAME          = Sql.ToString(rdr["LIST_NAME"         ]);
 								// 01/20/2009 Paul.  We need to pass the Application to the Term function. 
-								L10n.SetAlias(sALIAS_MODULE_NAME, sALIAS_LIST_NAME, sALIAS_NAME, sMODULE_NAME, sLIST_NAME, sNAME);
+								L10N.SetAlias(Application, sALIAS_MODULE_NAME, sALIAS_LIST_NAME, sALIAS_NAME, sMODULE_NAME, sLIST_NAME, sNAME);
 							}
 						}
 					}
@@ -705,7 +728,12 @@ namespace SplendidCRM
 			//Debug.WriteLine("SplendidInit.InitApp");
 			try
 			{
-				InitAppURLs();
+				// 06/03/2023 Paul.  Move InitAppURLs() to Startup. 
+				//InitAppURLs();
+				// 08/01/2015 Paul.  The Microsoft Web Platform Installer is unable to deploy due to a timeout when applying the Build.sql file. 
+				// We cannot build the database until after InitAppURLs as the domain name may be needed for SplendidRegistry. 
+				// 06/03/2023 Paul.  Move BuildDatabase() to Startup so we can call InitApp when done. 
+				//SqlBuild.BuildDatabase();
 				// 03/06/2008 Paul.  We cannot log the application start until the the ServerName has been stored in the Application cache. 
 				// 04/22/2008 Paul.  Include the version in the system log.
 				// 02/10/2015 Paul.  There are a few initial items, but they are less than 20. 
@@ -743,7 +771,6 @@ namespace SplendidCRM
 
 				// 07/01/2008 Paul.  Allow config values to be initialized from the Web.config. 
 				// This is so that the default_theme could be specified early. 
-				// 12/16/2021 TODO.  Confirm that this is loading data properly. 
 				IConfigurationSection appSettings = configuration.GetSection("appSettings");
 				foreach (IConfigurationSection section in appSettings.GetChildren() )
 				{
@@ -1157,7 +1184,7 @@ namespace SplendidCRM
 								{
 									// 11/19/2005 Paul.  Not sure why the login screen has the language, but it would seem to allow overriding the default. 
 									// 04/20/2018 Paul.  Alternate language mapping to convert en-CA to en_US. 
-									Session["USER_SETTINGS/CULTURE"          ] = L10n.AlternateLanguage(Sql.IsEmptyString(sCulture) ? Sql.ToString(rdr["LANG" ]) : sCulture);
+									Session["USER_SETTINGS/CULTURE"          ] = L10N.AlternateLanguage(Application, Sql.IsEmptyString(sCulture) ? Sql.ToString(rdr["LANG" ]) : sCulture);
 									// 11/22/2005 Paul.  The theme can be overridden as well. 
 									Session["USER_SETTINGS/THEME"            ] = Sql.IsEmptyString(sTheme  ) ? Sql.ToString(rdr["THEME"]) : sTheme  ;
 									// 11/30/2012 Paul.  Save the default them for the user, as specified in the preferences. This is to allow the user to go from the Mobile theme to the full site. 
@@ -1223,7 +1250,7 @@ namespace SplendidCRM
 			// 04/21/2021 Paul.  The mobile theme is now deprecated as most cell phones have large screens. 
 			/* if ( Utils.IsMobileDevice )
 			{
-				if ( Directory.Exists(Context.Server.MapPath("~/App_MasterPages/" + SplendidDefaults.MobileTheme())) )
+				if ( Directory.Exists(("~/App_MasterPages/" + SplendidDefaults.MobileTheme()).Replace("~", hostingEnvironment.ContentRootPath).Replace("/", "\\")) )
 				{
 					sTheme = SplendidDefaults.MobileTheme();
 					Session["USER_SETTINGS/THEME"] = sTheme;
@@ -1286,15 +1313,12 @@ namespace SplendidCRM
 				Guid gCURRENCY_ID = Sql.ToGuid(Session["USER_SETTINGS/CURRENCY"]);
 				Currency C10n = Currency.CreateCurrency(gCURRENCY_ID);
 				StringBuilder sbErrors = new StringBuilder();
-// 12/16/2021 TODO.  CurrencyLayer will not be supported in SplendidApp. 
-#if false
 				// 12/04/2021 Paul.  Move GetCurrencyConversionRate to Currency object so tha SplendidApp can exclude OrderUtils. 
-				float dRate = Currency.GetCurrencyConversionRate(C10n.ISO4217, sbErrors);
+				float dRate = CurrencyUtils.GetCurrencyConversionRate(C10n.ISO4217, sbErrors);
 				if ( sbErrors.Length == 0 )
 				{
 					C10n.CONVERSION_RATE = dRate;
 				}
-#endif
 			}
 		}
 
@@ -1935,7 +1959,7 @@ namespace SplendidCRM
 							/*
 							bool     bSYSTEM_GENERATED_PASSWORD = Sql.ToBoolean (rdr["SYSTEM_GENERATED_PASSWORD"]);
 							DateTime dtPWD_LAST_CHANGED         = Sql.ToDateTime(rdr["PWD_LAST_CHANGED"         ]);
-							int nExpirationDays = Password.ExpirationDays(Application);
+							int nExpirationDays = Password.ExpirationDays();
 							if ( nExpirationDays > 0 )
 							{
 								if ( dtPWD_LAST_CHANGED == DateTime.MinValue || dtPWD_LAST_CHANGED.AddDays(nExpirationDays) < DateTime.Now )
@@ -2078,7 +2102,7 @@ namespace SplendidCRM
 			// 05/04/2010 Paul.  Language may not be available in the master page. 
 			// 04/20/2018 Paul.  Alternate language mapping to convert en-CA to en_US. 
 			if ( !Sql.IsEmptyString(sLANGUAGE) )
-				Session["USER_SETTINGS/CULTURE"] = L10n.AlternateLanguage(sLANGUAGE);
+				Session["USER_SETTINGS/CULTURE"] = L10N.AlternateLanguage(Application, sLANGUAGE);
 		}
 
 		public bool LoginUser(string sUSER_NAME, string sPASSWORD, string sTHEME, string sLANGUAGE)
@@ -2157,5 +2181,4 @@ namespace SplendidCRM
 		}
 	}
 }
-
 

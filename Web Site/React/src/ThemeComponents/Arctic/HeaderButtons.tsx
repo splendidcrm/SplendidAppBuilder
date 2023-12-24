@@ -62,7 +62,8 @@ export default class ArcticHeaderButtons extends HeaderButtons
 		e.preventDefault();
 		let admin = '';
 		let module:MODULE = SplendidCache.Module(MODULE_NAME, this.constructor.name + '._onClickModule');
-		if ( module.IS_ADMIN )
+		// 09/04/2022 Paul.  Module may be disabled, so it will not exist. 
+		if ( module && module.IS_ADMIN )
 		{
 			admin = '/Administration';
 		}
@@ -78,7 +79,8 @@ export default class ArcticHeaderButtons extends HeaderButtons
 		e.preventDefault();
 		let admin = '';
 		let module:MODULE = SplendidCache.Module(MODULE_NAME, this.constructor.name + '._onClickItem');
-		if ( module.IS_ADMIN )
+		// 09/04/2022 Paul.  Module may be disabled, so it will not exist. 
+		if ( module && module.IS_ADMIN )
 		{
 			admin = '/Administration';
 		}
@@ -217,12 +219,14 @@ export default class ArcticHeaderButtons extends HeaderButtons
 		// 12/05/2021 Paul.  User should be able to open a new table by right-click on item name.  Change from span to anchor. 
 		let admin = '';
 		let module:MODULE = SplendidCache.Module(MODULE_NAME, this.constructor.name + '.render');
-		if ( module.IS_ADMIN )
+		// 09/04/2022 Paul.  Module may be disabled, so it will not exist. 
+		if ( module && module.IS_ADMIN )
 		{
 			admin = 'Administration/';
 		}
-		let sModuleUrl = Credentials.RemoteServer + `React/${admin}${MODULE_NAME}/List`;
-		let sItemUrl   = Credentials.RemoteServer + `React/${admin}${MODULE_NAME}/View/${ID}`;
+		// 07/01/2023 Paul.  ASP.NET Core will not have /React in the base. 
+		let sModuleUrl = Credentials.RemoteServer + Credentials.ReactBase + `${admin}${MODULE_NAME}/List`;
+		let sItemUrl   = Credentials.RemoteServer + Credentials.ReactBase + `${admin}${MODULE_NAME}/View/${ID}`;
 		return (
 			<React.Fragment>
 				<HelpView
@@ -389,5 +393,4 @@ export default class ArcticHeaderButtons extends HeaderButtons
 }
 
 // 12/05/2019 Paul.  We don't want to use withRouter() as it makes it difficult to get a reference. 
-
 

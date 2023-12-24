@@ -42,15 +42,19 @@ namespace SplendidCRM
 	public class SplendidDynamic
 	{
 		private HttpApplicationState Application        = new HttpApplicationState();
+		private HttpSessionState     Session            ;
 		private Security             Security           ;
 		private Currency             C10n               = new Currency();
 		private SplendidCache        SplendidCache      ;
+		private SplendidControl      Container          ;
 		private SplendidCRM.Crm.Modules          Modules         ;
 
-		public SplendidDynamic(Security Security, SplendidCache SplendidCache, SplendidCRM.Crm.Modules Modules)
+		public SplendidDynamic(HttpSessionState Session, Security Security, SplendidCache SplendidCache, SplendidControl Container, SplendidCRM.Crm.Modules Modules)
 		{
+			this.Session             = Session            ;
 			this.Security            = Security           ;
 			this.SplendidCache       = SplendidCache      ;
+			this.Container           = Container          ;
 			this.Modules             = Modules            ;
 		}
 
@@ -300,6 +304,60 @@ namespace SplendidCRM
 						{
 							if ( !Sql.IsEmptyString(sDATA_FIELD) )
 								arrSelectFields.Add(sDATA_FIELD);
+						}
+					}
+				}
+			}
+		}
+
+		// 12/04/2010 Paul.  Add support for Business Rules Framework to Reports. 
+		public void ApplyReportRules(L10N L10n, Guid gPRE_LOAD_EVENT_ID, Guid gPOST_LOAD_EVENT_ID, DataTable dt)
+		{
+			if ( !Sql.IsEmptyGuid(gPRE_LOAD_EVENT_ID) )
+			{
+				DataTable dtFields = SplendidCache.ReportRules(gPRE_LOAD_EVENT_ID);
+				if ( dtFields.Rows.Count > 0 )
+				{
+					string sMODULE_NAME = Sql.ToString(dtFields.Rows[0]["MODULE_NAME"]);
+					string sXOML        = Sql.ToString(dtFields.Rows[0]["XOML"       ]);
+					if ( !Sql.IsEmptyString(sXOML) )
+					{
+						RuleSet rules = RulesUtil.Deserialize(sXOML);
+						RuleValidation validation = new RuleValidation(typeof(SplendidReportThis), null);
+						// 11/11/2010 Paul.  Validate so that we can get more information on a runtime error. 
+						rules.Validate(validation);
+						if ( validation.Errors.Count > 0 )
+						{
+							throw(new Exception(RulesUtil.GetValidationErrors(validation)));
+						}
+						SplendidReportThis swThis = new SplendidReportThis(Security, Container, sMODULE_NAME, dt);
+						RuleExecution exec = new RuleExecution(validation, swThis);
+						rules.Execute(exec);
+					}
+				}
+			}
+			if ( !Sql.IsEmptyGuid(gPOST_LOAD_EVENT_ID) )
+			{
+				DataTable dtFields = SplendidCache.ReportRules(gPOST_LOAD_EVENT_ID);
+				if ( dtFields.Rows.Count > 0 )
+				{
+					string sMODULE_NAME = Sql.ToString(dtFields.Rows[0]["MODULE_NAME"]);
+					string sXOML        = Sql.ToString(dtFields.Rows[0]["XOML"       ]);
+					if ( !Sql.IsEmptyString(sXOML) )
+					{
+						RuleSet rules = RulesUtil.Deserialize(sXOML);
+						RuleValidation validation = new RuleValidation(typeof(SplendidReportThis), null);
+						// 11/11/2010 Paul.  Validate so that we can get more information on a runtime error. 
+						rules.Validate(validation);
+						if ( validation.Errors.Count > 0 )
+						{
+							throw(new Exception(RulesUtil.GetValidationErrors(validation)));
+						}
+						foreach ( DataRow row in dt.Rows )
+						{
+							SplendidReportThis swThis = new SplendidReportThis(Security, Container, sMODULE_NAME, row);
+							RuleExecution exec = new RuleExecution(validation, swThis);
+							rules.Execute(exec);
 						}
 					}
 				}
@@ -2823,5 +2881,4 @@ namespace SplendidCRM
 
 	}
 }
-
 

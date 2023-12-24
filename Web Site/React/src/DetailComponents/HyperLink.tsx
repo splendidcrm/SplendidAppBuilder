@@ -168,7 +168,13 @@ class HyperLink extends React.Component<IHyperLinkProps, IHyperLinkState>
 								{
 									URL = URL_FORMAT.replace('/view.aspx?ID={0}', '/View/' + URL_VALUE);
 								}
-								if ( URL_FORMAT.indexOf('~/Administration/') >= 0 )
+								// 09/28/2022 Paul.  If target is provided, then we must use anchor tag. 
+								if ( !Sql.IsEmptyString(layout.URL_TARGET) )
+								{
+									// 07/08/2023 Paul.  ASP.NET Core will not have /React in the base. 
+									URL = URL.replace('~/', Credentials.RemoteServer + Credentials.ReactBase);
+								}
+								else if ( URL_FORMAT.indexOf('~/Administration/') >= 0 )
 								{
 									URL = URL.replace('~/Administration', '/Reset/Administration');
 								}
@@ -395,4 +401,3 @@ class HyperLink extends React.Component<IHyperLinkProps, IHyperLinkState>
 }
 
 export default withRouter(HyperLink);
-

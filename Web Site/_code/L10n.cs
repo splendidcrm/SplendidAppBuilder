@@ -56,7 +56,7 @@ namespace SplendidCRM
 			HttpSessionState Session = Context.Features.Get<HttpSessionState>();
 			if ( Session != null )
 			{
-				sNAME = Sql.ToString(Session["USER_LANG"]);
+				sNAME = Sql.ToString(Session["USER_SETTINGS/CULTURE"]);
 			}
 			this.m_sNAME = NormalizeCulture(sNAME);
 		}
@@ -75,7 +75,7 @@ namespace SplendidCRM
 		}
 
 		// 04/20/2018 Paul.  Alternate language mapping to convert en-CA to en_US. 
-		public string AlternateLanguage(string sCulture)
+		public static string AlternateLanguage(HttpApplicationState Application, string sCulture)
 		{
 			string sAlternateName = Sql.ToString(Application["CONFIG.alternate_language." + sCulture]);
 			if ( !Sql.IsEmptyString(sAlternateName) )
@@ -103,6 +103,11 @@ namespace SplendidCRM
 		// 08/17/2005 Paul.  Special Term function that helps with a list. 
 		public object Term(string sCultureName, string sListName, object oField)
 		{
+			return L10N.Term(Application, sCultureName, sListName, oField);
+		}
+
+		public static object Term(HttpApplicationState Application, string sCultureName, string sListName, object oField)
+		{
 			// 01/11/2008 Paul.  Protect against uninitialized variables. 
 			if ( String.IsNullOrEmpty(sListName) )
 				return String.Empty;
@@ -110,7 +115,7 @@ namespace SplendidCRM
 			if ( oField == null || oField == DBNull.Value )
 				return oField;
 			// 11/28/2005 Paul.  Convert field to string instead of cast.  Cast will not work for integer fields. 
-			return Term(sCultureName, sListName + oField.ToString());
+			return L10N.Term(Application, sCultureName, sListName + oField.ToString());
 		}
 
 		public string Term(string sEntryName)
@@ -119,6 +124,11 @@ namespace SplendidCRM
 		}
 
 		public string Term(string sCultureName, string sEntryName)
+		{
+			return L10N.Term(Application, sCultureName, sEntryName);
+		}
+
+		public static string Term(HttpApplicationState Application, string sCultureName, string sEntryName)
 		{
 			// 01/11/2008 Paul.  Protect against uninitialized variables. 
 			if ( String.IsNullOrEmpty(sEntryName) || Application == null )
@@ -193,12 +203,12 @@ namespace SplendidCRM
 			return Term(oAliasedName.ToString());
 		}
 
-		public void SetTerm(string sLANG, string sMODULE_NAME, string sNAME, string sDISPLAY_NAME)
+		public static void SetTerm(HttpApplicationState Application, string sLANG, string sMODULE_NAME, string sNAME, string sDISPLAY_NAME)
 		{
 			Application[sLANG + "." + sMODULE_NAME + "." + sNAME] = sDISPLAY_NAME;
 		}
 
-		public void SetTerm(string sLANG, string sMODULE_NAME, string sLIST_NAME, string sNAME, string sDISPLAY_NAME)
+		public static void SetTerm(HttpApplicationState Application, string sLANG, string sMODULE_NAME, string sLIST_NAME, string sNAME, string sDISPLAY_NAME)
 		{
 			// 01/13/2006 Paul.  Don't include MODULE_NAME when used with a list. DropDownLists are populated without the module name in the list name. 
 			// 01/13/2006 Paul.  We can remove the module, but not the dot.  Otherwise it breaks all other code that references a list term. 
@@ -206,7 +216,7 @@ namespace SplendidCRM
 			Application[sLANG + "." + sMODULE_NAME + "." + sLIST_NAME + "." + sNAME] = sDISPLAY_NAME;
 		}
 
-		public void SetAlias(string sALIAS_MODULE_NAME, string sALIAS_LIST_NAME, string sALIAS_NAME, string sMODULE_NAME, string sLIST_NAME, string sNAME)
+		public static void SetAlias(HttpApplicationState Application, string sALIAS_MODULE_NAME, string sALIAS_LIST_NAME, string sALIAS_NAME, string sMODULE_NAME, string sLIST_NAME, string sNAME)
 		{
 			if ( Sql.IsEmptyString(sALIAS_LIST_NAME) )
 				Application["ALIAS_" + sALIAS_MODULE_NAME + "." + sALIAS_NAME] = sMODULE_NAME + "." + sNAME;
@@ -224,5 +234,4 @@ namespace SplendidCRM
 		}
 	}
 }
-
 

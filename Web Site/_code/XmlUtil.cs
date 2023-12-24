@@ -30,11 +30,14 @@ namespace SplendidCRM
 	/// </summary>
 	public class XmlUtil
 	{
-		public XmlUtil()
+		private SplendidError SplendidError;
+
+		public XmlUtil(SplendidError SplendidError)
 		{
+			this.SplendidError = SplendidError;
 		}
 
-		public static DataTable CreateDataTable(XmlNode parent, string sTableName, string sPrimaryKey, string[] asColumns)
+		public DataTable CreateDataTable(XmlNode parent, string sTableName, string sPrimaryKey, string[] asColumns)
 		{
 			DataTable dt = new DataTable(sTableName);
 			dt.Columns.Add(sPrimaryKey);
@@ -55,16 +58,13 @@ namespace SplendidCRM
 						{
 							row[sPrimaryKey] = node.Attributes.GetNamedItem(sPrimaryKey).Value;
 						}
-						catch // (Exception ex)
+						catch (Exception ex)
 						{
-// 12/19/2021 TODO.  We don't want to include SplendidError. 
-#if false
 							SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
-#endif
 						}
 						foreach(string sColumn in asColumns)
 						{
-							row[sColumn] = XmlUtil.SelectSingleNode(node, sColumn);
+							row[sColumn] = this.SelectSingleNode(node, sColumn);
 						}
 					}
 				}
@@ -72,7 +72,7 @@ namespace SplendidCRM
 			return dt;
 		}
 
-		public static DataTable CreateDataTable(XmlNode parent, string sTableName, string[] asColumns)
+		public DataTable CreateDataTable(XmlNode parent, string sTableName, string[] asColumns)
 		{
 			DataTable dt = new DataTable(sTableName);
 			foreach(string sColumn in asColumns)
@@ -90,7 +90,7 @@ namespace SplendidCRM
 						dt.Rows.Add(row);
 						foreach(string sColumn in asColumns)
 						{
-							row[sColumn] = XmlUtil.SelectSingleNode(node, sColumn);
+							row[sColumn] = this.SelectSingleNode(node, sColumn);
 						}
 					}
 				}
@@ -98,7 +98,7 @@ namespace SplendidCRM
 			return dt;
 		}
 
-		public static void RemoveAllChildren(XmlDocument xml, string sNode)
+		public void RemoveAllChildren(XmlDocument xml, string sNode)
 		{
 			try
 			{
@@ -124,7 +124,7 @@ namespace SplendidCRM
 			}
 		}
 
-		public static string SelectSingleNode(XmlDocument xml, string sNode)
+		public string SelectSingleNode(XmlDocument xml, string sNode)
 		{
 			try
 			{
@@ -143,7 +143,7 @@ namespace SplendidCRM
 			return String.Empty;
 		}
 
-		public static string GetNamedItem(XmlNode xNode, string sAttribute)
+		public string GetNamedItem(XmlNode xNode, string sAttribute)
 		{
 			string sValue = String.Empty;
 			XmlNode xValue = xNode.Attributes.GetNamedItem(sAttribute);
@@ -152,7 +152,7 @@ namespace SplendidCRM
 			return sValue;
 		}
 
-		public static string SelectSingleNode(XmlDocument xml, string sNode, XmlNamespaceManager nsmgr)
+		public string SelectSingleNode(XmlDocument xml, string sNode, XmlNamespaceManager nsmgr)
 		{
 			try
 			{
@@ -174,7 +174,7 @@ namespace SplendidCRM
 			return String.Empty;
 		}
 
-		public static string SelectSingleNode(XmlDocument xml, string sNode, string sDefault)
+		public string SelectSingleNode(XmlDocument xml, string sNode, string sDefault)
 		{
 			try
 			{
@@ -194,7 +194,7 @@ namespace SplendidCRM
 			return sDefault;
 		}
 
-		public static string SelectSingleNode(XmlNode node, string sNode)
+		public string SelectSingleNode(XmlNode node, string sNode)
 		{
 			try
 			{
@@ -214,7 +214,7 @@ namespace SplendidCRM
 		}
 
 		// 03/29/2008 Paul.  We need a safe way to get the attribute. 
-		public static string SelectAttribute(XmlNode parent, string sNode, string sAttribute)
+		public string SelectAttribute(XmlNode parent, string sNode, string sAttribute)
 		{
 			try
 			{
@@ -235,7 +235,7 @@ namespace SplendidCRM
 			return String.Empty;
 		}
 
-		public static string SelectAttribute(XmlNode node, string sAttribute)
+		public string SelectAttribute(XmlNode node, string sAttribute)
 		{
 			try
 			{
@@ -252,7 +252,7 @@ namespace SplendidCRM
 			return String.Empty;
 		}
 
-		public static string SelectSingleNode(XmlNode parent, string sNode, XmlNamespaceManager nsmgr)
+		public string SelectSingleNode(XmlNode parent, string sNode, XmlNamespaceManager nsmgr)
 		{
 			try
 			{
@@ -286,7 +286,7 @@ namespace SplendidCRM
 			return String.Empty;
 		}
 
-		public static XmlNode SelectNode(XmlDocument xml, string sNode, XmlNamespaceManager nsmgr)
+		public XmlNode SelectNode(XmlDocument xml, string sNode, XmlNamespaceManager nsmgr)
 		{
 			try
 			{
@@ -320,7 +320,7 @@ namespace SplendidCRM
 			return null;
 		}
 
-		public static XmlNode SelectNode(XmlNode parent, string sNode, XmlNamespaceManager nsmgr)
+		public XmlNode SelectNode(XmlNode parent, string sNode, XmlNamespaceManager nsmgr)
 		{
 			try
 			{
@@ -350,7 +350,7 @@ namespace SplendidCRM
 			return null;
 		}
 
-		public static void SetSingleNode(XmlDocument xml, string sNode, string sValue)
+		public void SetSingleNode(XmlDocument xml, string sNode, string sValue)
 		{
 			try
 			{
@@ -378,7 +378,7 @@ namespace SplendidCRM
 			}
 		}
 
-		public static void SetSingleNode(XmlDocument xml, string sNode, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
+		public void SetSingleNode(XmlDocument xml, string sNode, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
 		{
 			try
 			{
@@ -411,7 +411,7 @@ namespace SplendidCRM
 		}
 
 		// 11/20/2011 Paul.  Charting needs a way to skip updating if value exists. 
-		public static void SetSingleNode_InsertOnly(XmlDocument xml, string sNode, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
+		public void SetSingleNode_InsertOnly(XmlDocument xml, string sNode, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
 		{
 			try
 			{
@@ -444,7 +444,7 @@ namespace SplendidCRM
 			}
 		}
 
-		public static void SetSingleNodeAttribute(XmlDocument xml, string sNode, string sAttribute, string sValue)
+		public void SetSingleNodeAttribute(XmlDocument xml, string sNode, string sAttribute, string sValue)
 		{
 			try
 			{
@@ -473,7 +473,7 @@ namespace SplendidCRM
 			}
 		}
 
-		public static void SetSingleNodeAttribute(XmlDocument xml, string sNode, string sAttribute, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
+		public void SetSingleNodeAttribute(XmlDocument xml, string sNode, string sAttribute, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
 		{
 			try
 			{
@@ -506,7 +506,7 @@ namespace SplendidCRM
 			}
 		}
 
-		public static void SetSingleNodeAttribute(XmlDocument xml, XmlNode parent, string sAttribute, string sValue)
+		public void SetSingleNodeAttribute(XmlDocument xml, XmlNode parent, string sAttribute, string sValue)
 		{
 			try
 			{
@@ -519,7 +519,7 @@ namespace SplendidCRM
 			}
 		}
 
-		public static void SetSingleNodeAttribute(XmlDocument xml, XmlNode parent, string sAttribute, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
+		public void SetSingleNodeAttribute(XmlDocument xml, XmlNode parent, string sAttribute, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
 		{
 			try
 			{
@@ -533,7 +533,7 @@ namespace SplendidCRM
 		}
 
 		// 12/10/2009 Paul.  We need to be able to set the attribute with a prefix. 
-		public static void SetSingleNodeAttribute(XmlDocument xml, XmlNode parent, string prefix, string sAttribute, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
+		public void SetSingleNodeAttribute(XmlDocument xml, XmlNode parent, string prefix, string sAttribute, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
 		{
 			try
 			{
@@ -546,7 +546,7 @@ namespace SplendidCRM
 			}
 		}
 
-		public static void SetSingleNode(XmlDocument xml, XmlNode parent, string sNode, string sValue)
+		public void SetSingleNode(XmlDocument xml, XmlNode parent, string sNode, string sValue)
 		{
 			try
 			{
@@ -572,7 +572,7 @@ namespace SplendidCRM
 			}
 		}
 
-		public static void SetSingleNode(XmlDocument xml, XmlNode parent, string sNode, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
+		public void SetSingleNode(XmlDocument xml, XmlNode parent, string sNode, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
 		{
 			try
 			{
@@ -602,7 +602,7 @@ namespace SplendidCRM
 			}
 		}
 
-		public static void AppendNode(XmlDocument xml, XmlNode parent, string sNode, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
+		public void AppendNode(XmlDocument xml, XmlNode parent, string sNode, string sValue, XmlNamespaceManager nsmgr, string sNamespaceURI)
 		{
 			try
 			{
@@ -687,21 +687,7 @@ namespace SplendidCRM
 			}
 		}
 
-		// 12/16/2021 TODO.  Dump XmlDocument. 
-#if false
-		public static void Dump(XmlDocument xml)
-		{
-			StringBuilder sb = new StringBuilder();
-			if ( xml != null && xml.DocumentElement != null)
-				Dump(ref sb, "", xml.DocumentElement);
-			string sDump = HttpContext.Current.Server.HtmlEncode(sb.ToString());
-			HttpContext.Current.Response.Write("<pre><font face='courier new'>");
-			HttpContext.Current.Response.Write(sDump);
-			HttpContext.Current.Response.Write("</font></pre>");
-		}
-#endif
-
-		public static string BaseTypeXPath(object o)
+		public string BaseTypeXPath(object o)
 		{
 			return o.GetType().BaseType.ToString().Replace(".", "/");
 		}
@@ -781,7 +767,7 @@ namespace SplendidCRM
 			return sNumber;
 		}
 
-		private static void PHPArray(XmlDocument xml, XmlElement parent, MemoryStream mem)
+		private void PHPArray(XmlDocument xml, XmlElement parent, MemoryStream mem)
 		{
 			string sSize = String.Empty;
 			string sNAME  = String.Empty;
@@ -826,13 +812,13 @@ namespace SplendidCRM
 						if ( ch == 's' )
 						{
 							sVALUE = PHPString(mem);
-							XmlUtil.SetSingleNode(xml, parent, sNAME, sVALUE);
+							this.SetSingleNode(xml, parent, sNAME, sVALUE);
 							nMode = 0;
 						}
 						else if ( ch == 'i' )
 						{
 							sVALUE = PHPInteger(mem);
-							XmlUtil.SetSingleNode(xml, parent, sNAME, sVALUE);
+							this.SetSingleNode(xml, parent, sNAME, sVALUE);
 							nMode = 0;
 						}
 						else if ( ch == 'a' )
@@ -847,13 +833,13 @@ namespace SplendidCRM
 						if ( ch == 's' )
 						{
 							sVALUE = PHPString(mem);
-							XmlUtil.SetSingleNode(xml, parent, "index_" + sNAME, sVALUE);
+							this.SetSingleNode(xml, parent, "index_" + sNAME, sVALUE);
 							nMode = 0;
 						}
 						else if ( ch == 'i' )
 						{
 							sVALUE = PHPInteger(mem);
-							XmlUtil.SetSingleNode(xml, parent, "index_" + sNAME, sVALUE);
+							this.SetSingleNode(xml, parent, "index_" + sNAME, sVALUE);
 							nMode = 0;
 						}
 						break;
@@ -862,48 +848,7 @@ namespace SplendidCRM
 			}
 		}
 
-// 12/19/2021 Paul.  We don't need to convert old SugarCRM PHP preferences any more. 
-#if false
-		public static string ConvertFromPHP(string sPHP)
-		{
-			XmlDocument xml = new XmlDocument();
-			xml.AppendChild(xml.CreateProcessingInstruction("xml" , "version=\"1.0\" encoding=\"UTF-8\""));
-			xml.AppendChild(xml.CreateElement("USER_PREFERENCE"));
-			try
-			{
-				// 01/28/2009 Paul.  Check for empty string before attempting to convert. 
-				if ( !Sql.IsEmptyString(sPHP) )
-				{
-					byte[] abyPHP = Convert.FromBase64String(sPHP);
-					StringBuilder sb = new StringBuilder();
-					foreach(char by in abyPHP)
-						sb.Append(by);
-					MemoryStream mem = new MemoryStream(abyPHP);
-
-					string sSize = String.Empty;
-					int nChar = mem.ReadByte();
-					while ( nChar != -1 )
-					{
-						char ch = Convert.ToChar(nChar);
-						if ( ch == 'a' )
-							PHPArray(xml, xml.DocumentElement, mem);
-						else if ( ch == 's' )
-							PHPString(mem);
-						else if ( ch == 'i' )
-							PHPInteger(mem);
-						nChar = mem.ReadByte();
-					}
-				}
-			}
-			catch // (Exception ex)
-			{
-				SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
-			}
-			return xml.OuterXml;
-		}
-#endif
-
-		public static string ConvertToPHP(XmlElement parent)
+		public string ConvertToPHP(XmlElement parent)
 		{
 			StringBuilder sb = new StringBuilder();
 			if ( parent.ChildNodes.Count > 1 )
@@ -937,20 +882,20 @@ namespace SplendidCRM
 			return ToBase64String(sb.ToString());
 		}
 
-		public static string ToBase64String(string s)
+		public string ToBase64String(string s)
 		{
 			byte[] aby = UTF8Encoding.UTF8.GetBytes(s);
 			return Convert.ToBase64String(aby);
 		}
 
-		public static string FromBase64String(string s)
+		public string FromBase64String(string s)
 		{
 			byte[] aby = Convert.FromBase64String(s);
 			return UTF8Encoding.UTF8.GetString(aby);
 		}
 
 		// http://stackoverflow.com/questions/642125/encoding-xpath-expressions-with-both-single-and-double-quotes
-		public static string EncaseXpathString(string input)
+		public string EncaseXpathString(string input)
 		{
 			// If we don't have any " then encase string in "
 			if ( !input.Contains("\"") )
@@ -988,5 +933,4 @@ namespace SplendidCRM
 		}
 	}
 }
-
 

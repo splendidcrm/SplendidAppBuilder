@@ -36,6 +36,8 @@ interface IAdministrationViewState
 {
 	ADMIN_MENU  : any;
 	stateKey    : number;
+	busy        : boolean;
+	// 06/11/2023 Paul.  Show spinner when busy. 
 	error       : any;
 	recompileKey: string;
 }
@@ -51,6 +53,7 @@ class AdministrationView extends React.Component<IAdministrationViewProps, IAdmi
 		{
 			ADMIN_MENU  : null,
 			stateKey    : 0,
+			busy       : false,
 			error       : null,
 			recompileKey: 'recompile',
 		};
@@ -167,6 +170,24 @@ class AdministrationView extends React.Component<IAdministrationViewProps, IAdmi
 		this.props.history.push('/Administration/_devtools/Precompile');
 	}
 
+	// 06/11/2023 Paul.  Add Purge Demo Data. 
+	private onPurgeDemoData = async () =>
+	{
+		const { stateKey } = this.state;
+		try
+		{
+			let row: any = {};
+			this.setState({ busy: true });
+			await AdminProcedure('spSqlPurgeDemoData', row);
+			this.setState( {stateKey: stateKey + 1, error: null, busy: false} );
+		}
+		catch(error)
+		{
+			console.error((new Date()).toISOString() + ' ' + this.constructor.name + '.onPurgeDemoData', error);
+			this.setState({ error, busy: false });
+		}
+	}
+
 	private toggleReactClient =  async () =>
 	{
 		const { stateKey } = this.state;
@@ -218,34 +239,48 @@ class AdministrationView extends React.Component<IAdministrationViewProps, IAdmi
 				</div>
 				);
 			}
+			// 06/11/2023 Paul.  Add Purge Demo Data. 
+			else if ( ADMIN_ROUTE == 'BackupDatabase' )
+			{
+				return (<div style={ {textAlign: 'center'} }>
+					(&nbsp;
+					<a href='#' onClick={ (e) => { e.preventDefault(); return this.onPurgeDemoData(); } }  className='tabDetailViewDL2Link'>{ L10n.Term('Administration.LBL_PURGE_DEMO') }</a>
+					&nbsp;)
+				</div>
+				);
+			}
 		}
 		else if ( MODULE_NAME == 'Modules' )
 		{
-			// 07/06/2021 Paul.  Provide an quick and easy way to enable/disable React client. 
-			let RELATIVE_PATH: string = '';
-			let module: any = SplendidCache.Module('Home', this.constructor.name + '.ModuleStatus');
-			if ( module != null )
-				RELATIVE_PATH = Sql.ToString(module.RELATIVE_PATH);
-			return (<div style={ {textAlign: 'center'} }>
-				(&nbsp;
-				<a href='#' 
-					key={ MODULE_NAME + '_Actions_' + stateKey} 
-					onClick={ (e) => { e.preventDefault(); return this.toggleConfigFlag('allow_custom_paging'); } } 
-					className='tabDetailViewDL2Link'>{ Crm_Config.ToBoolean('allow_custom_paging') ? L10n.Term('Modules.LBL_DISABLE') : L10n.Term('Modules.LBL_ENABLE') }</a>
-				{ SplendidCache.AdminUserAccess('Administration', 'access') >= 0
-				? <span>
-				&nbsp;
-				&nbsp;
-				<a href='#' 
-					key={ MODULE_NAME + '_React_' + stateKey} 
-					onClick={ (e) => { e.preventDefault(); return this.toggleReactClient(); } } 
-					className='tabDetailViewDL2Link'>{ RELATIVE_PATH.toLowerCase() == '~/react/home' ? L10n.Term('Modules.LBL_REACT_CLIENT_DISABLE') : L10n.Term('Modules.LBL_REACT_CLIENT_ENABLE') }</a>
-				</span>
-				: null
-				}
-				)
-			</div>
-			);
+			// 07/01/2023 Paul. Should only appear on Modules, not Configure Tabs. 
+			if ( ADMIN_ROUTE == 'List' )
+			{
+				// 07/06/2021 Paul.  Provide an quick and easy way to enable/disable React client. 
+				let RELATIVE_PATH: string = '';
+				let module: any = SplendidCache.Module('Home', this.constructor.name + '.ModuleStatus');
+				if ( module != null )
+					RELATIVE_PATH = Sql.ToString(module.RELATIVE_PATH);
+				return (<div style={ {textAlign: 'center'} }>
+					(&nbsp;
+					<a href='#' 
+						key={ MODULE_NAME + '_Actions_' + stateKey} 
+						onClick={ (e) => { e.preventDefault(); return this.toggleConfigFlag('allow_custom_paging'); } } 
+						className='tabDetailViewDL2Link'>{ Crm_Config.ToBoolean('allow_custom_paging') ? L10n.Term('Modules.LBL_DISABLE') : L10n.Term('Modules.LBL_ENABLE') }</a>
+					{ SplendidCache.AdminUserAccess('Administration', 'access') >= 0 && !Crm_Config.ToBoolean('disable_admin_classic')
+					? <span>
+					&nbsp;
+					&nbsp;
+					<a href='#' 
+						key={ MODULE_NAME + '_React_' + stateKey} 
+						onClick={ (e) => { e.preventDefault(); return this.toggleReactClient(); } } 
+						className='tabDetailViewDL2Link'>{ RELATIVE_PATH.toLowerCase() == '~/react/home' ? L10n.Term('Modules.LBL_REACT_CLIENT_DISABLE') : L10n.Term('Modules.LBL_REACT_CLIENT_ENABLE') }</a>
+					</span>
+					: null
+					}
+					)
+				</div>
+				);
+			}
 		}
 		else if ( MODULE_NAME == 'DataPrivacy' )
 		{
@@ -533,14 +568,21 @@ class AdministrationView extends React.Component<IAdministrationViewProps, IAdmi
 
 	public render()
 	{
-		const { ADMIN_MENU, error, recompileKey } = this.state;
+		const { ADMIN_MENU, busy, error, recompileKey } = this.state;
 		// 05/04/2019 Paul.  Reference obserable IsInitialized so that terminology update will cause refresh. 
+		// 06/11/2023 Paul.  Show spinner when busy. 
 		if ( SplendidCache.IsInitialized && SplendidCache.AdminMenu )
 		{
 			return (
 			<div id="ctlAdministration">
 				<h2>{ L10n.Term('Administration.LBL_MODULE_TITLE') }</h2>
 				<ErrorComponent error={error} />
+				{ busy
+				? <div id={ this.constructor.name + '_spinner' } style={ {textAlign: 'center'} }>
+					<FontAwesomeIcon icon="spinner" spin={ true } size="5x" />
+				</div>
+				: null
+				}
 				{ ADMIN_MENU
 				? ADMIN_MENU.map(adminPanel => (
 					<div>
@@ -597,4 +639,3 @@ class AdministrationView extends React.Component<IAdministrationViewProps, IAdmi
 }
 
 export default withRouter(AdministrationView);
-

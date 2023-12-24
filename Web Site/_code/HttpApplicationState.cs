@@ -40,6 +40,8 @@ namespace SplendidCRM
 				// Operations that change non-concurrent collections must have exclusive access. A concurrent update was performed on this collection and corrupted its state. The collection's state is no longer correct.
 				lock ( Application )
 				{
+					this["CONFIG.session_timeout"                      ] = Configuration["session_timeout"                      ];
+
 					this["CONFIG.Azure.SingleSignOn.Enabled"           ] = Configuration["Azure.SingleSignOn:Enabled"           ];
 					this["CONFIG.Azure.SingleSignOn.AadTenantDomain"   ] = Configuration["Azure.SingleSignOn:AadTenantDomain"   ];
 					this["CONFIG.Azure.SingleSignOn.ValidIssuer"       ] = Configuration["Azure.SingleSignOn:ValidIssuer"       ];

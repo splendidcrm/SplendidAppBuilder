@@ -63,6 +63,12 @@ else
 }
 
 let sRemoteServer = '';
+// 07/01/2023 Paul.  ASP.NET Core will not have /React in the base. 
+let sReactBase    = '';
+if ( baseUrl.indexOf('/React') >= 0 )
+{
+	sReactBase = 'React/';
+}
 // 10/12/2019 Paul.  Include query string to allow deep links. 
 let pathname = window.location.pathname + window.location.search;
 //console.log((new Date()).toISOString() + ' ' + 'window.location', window.location);
@@ -85,15 +91,16 @@ else if ( process.env.PATH )
 	pathname = process.env.PATH;
 	sRemoteServer = pathname.substring(0, pathname.indexOf('/', 1) + 1);
 }
-// 12/28/2021 Paul.  SplendidApp uses ASP.Net Core and will not have /React in the URL. 
-else if ( pathname.toLowerCase().indexOf('/react', 1) >= 0 )
+// 05/21/2023 Paul.  SplendidApp uses ASP.Net Core and will not have /React in the URL. 
+// 09/20/2023 Paul.  Start at position 0, otherwise ASP.Net 4.8 apps with site at root will fail. 
+else if ( pathname.toLowerCase().indexOf('/react', 0) >= 0 )
 {
 	// 04/28/2020 Paul.  Allow for /react, or other case issues. 
-	sRemoteServer = window.location.origin + pathname.substring(0, pathname.toLowerCase().indexOf('/react', 1) + 1);
+	sRemoteServer = window.location.origin + pathname.substring(0, pathname.toLowerCase().indexOf('/react', 0) + 1);
 }
 else
 {
-	// 01/24/2022 Paul.  baseUrl is working with SplendidApp, so use directly. 
+	// 05/21/2023 Paul.  baseUrl is working with SplendidApp, so use directly. 
 	sRemoteServer = window.location.origin + baseUrl;
 }
 // 04/28/2020 Paul.  Allow for /react, or other case issues. 
@@ -113,6 +120,8 @@ if ( Credentials.bMOBILE_CLIENT )
 //console.log((new Date()).toISOString() + ' index.tsx ' + 'pathname', pathname);
 //console.log((new Date()).toISOString() + ' index.tsx ' + 'sRemoteServer', sRemoteServer);
 Credentials.SetREMOTE_SERVER(sRemoteServer);
+// 07/01/2023 Paul.  ASP.NET Core will not have /React in the base. 
+Credentials.SetREACT_BASE(sReactBase);
 
 const sLastActiveModule: string = Sql.ToString(localStorage.getItem('ReactLastActiveModule'));
 // 06/14/2019 Paul.  Ignore LastActiveModule if deep URL provided. 
@@ -137,14 +146,22 @@ try
 		else if ( !StartsWith(pathname, '/Reload') )
 		{
 			//s//console.log('index.tsx: ' + pathname);
-			history.push(pathname);
+			// 05/22/2023 Paul.  We are having an issue of the pathname being treated as a module name.  It only seems to happen with url http://localhost/SplendidCRM
+			if ( pathname + '/' == baseUrl )
+				history.push('/Home');
+			else
+				history.push(pathname);
 		}
 	}
 	else if ( !Sql.IsEmptyString(sLastActiveModule) )
 	{
 		//console.log('index.tsx: Starting at Last Active Module ' + sLastActiveModule);
 		// 05/30/2019 Paul.  Experiment with returning to the same location, no matter how deep. 
-		history.push(sLastActiveModule);
+		// 05/22/2023 Paul.  We are having an issue of the sLastActiveModule being treated as a module name.  It only seems to happen with url http://localhost/SplendidCRM
+		if ( sLastActiveModule + '/' == baseUrl )
+			history.push('/Home');
+		else
+			history.push(sLastActiveModule);
 	}
 	else
 	{
@@ -235,6 +252,15 @@ if (!window.cordova)
 else
 {
 	document.addEventListener('deviceready', render, false);
+	// 03/05/2022 Paul.  divFooterCopyright is not flowing below content on Android, so just hide. 
+	window.onload = function()
+	{
+		let divFooterCopyright = document.getElementById('divFooterCopyright');
+		if ( divFooterCopyright )
+		{
+			divFooterCopyright.style.display = 'none';
+		}
+	}
 }
 
 declare let module: { hot: any };

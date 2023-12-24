@@ -9060,6 +9060,7 @@ GO
 -- 01/10/2014 Paul.  Add smalldatetime to support a customer customization. 
 -- 09/22/2016 Paul.  Manually specify default collation to ease migration to Azure
 -- 01/22/2020 Paul.  A customer is using the "date" type. 
+-- 02/11/2023 Paul.  Add support for DataTable using INFORMATION_SCHEMA. 
 Create View dbo.vwSqlColumns
 as
 select objects.name  collate database_default          as ObjectName
@@ -9284,6 +9285,7 @@ select procedures.name           as ObjectName
              when parameters.system_type_id = 108 then N'float'
              when parameters.system_type_id = 165 then N'byte[]'
              when parameters.system_type_id = 173 then N'byte[]'
+             when SCHEMA_PARAMETERS.DATA_TYPE = 'table type' then 'DataTable'
         end
        ) as CsType
      , (case when parameters.system_type_id =  36 then N'g'
@@ -9309,6 +9311,7 @@ select procedures.name           as ObjectName
              when parameters.system_type_id = 108 then N'fl'
              when parameters.system_type_id = 165 then N'bin'
              when parameters.system_type_id = 173 then N'bin'
+             when SCHEMA_PARAMETERS.DATA_TYPE = 'table type' then 'tbl'
         end
        ) as CsPrefix
      , cast(null as bit) as IsIdentity
@@ -9316,6 +9319,9 @@ select procedures.name           as ObjectName
   from      sys.procedures         procedures
  inner join sys.parameters         parameters
          on parameters.object_id = procedures.object_id
+ inner join INFORMATION_SCHEMA.PARAMETERS SCHEMA_PARAMETERS
+         on SCHEMA_PARAMETERS.SPECIFIC_NAME = procedures.name
+        and SCHEMA_PARAMETERS.PARAMETER_NAME = parameters.name
  where procedures.type = 'P'
    and parameters.system_type_id <> 189 -- timestamp
 
@@ -14268,6 +14274,7 @@ GO
 -- 09/25/2020 Paul.  Allow Twitter.ConsumerKey so that we can check if enabled in React Client. 
 -- 03/14/2021 Paul.  smtpserver and smtpport are needed by the React Client. 
 -- 03/17/2021 Paul.  PaymentGateway_ID is not confidencial as it is our own ID and it is needed by React Client. 
+-- 12/26/2022 Paul.  Instead of returning secret values, return empty password **********. 
 Create View dbo.vwCONFIG_Sync
 as
 select ID
@@ -14279,49 +14286,54 @@ select ID
      , DATE_MODIFIED_UTC
      , CATEGORY
      , NAME
-     , VALUE
+     , (case
+        when VALUE is null then null
+	else (case
+              when NAME in   ('AmazonAWS.AccessKeyID', 'AmazonAWS.SecretAccessKey', 'AmazonAWS.X509Certificate', 'AmazonAWS.X509Password', 'AmazonAWS.X509PrivateKey') then '**********'
+              when NAME in   ('AmazonS3.AccessKeyID', 'AmazonS3.SecretAccessKey') then '**********'
+              when NAME in   ('CreditCardIV', 'CreditCardKey') then '**********'
+              when NAME in   ('InboundEmailIV', 'InboundEmailKey') then '**********'
+              when NAME in   ('PaymentGateway_Login', 'PaymentGateway_Password') then '**********'
+              when NAME in   ('PayPal.APIPassword', 'PayPal.APIUsername', 'PayPal.ClientID', 'PayPal.ClientSecret', 'PayPal.X509Certificate', 'PayPal.X509PrivateKey') then '**********'
+              when NAME in   ('smtpuser', 'smtppass', 'smtpcertificate') then '**********'
+              when NAME in   ('Exchange.ClientSecret', 'Exchange.Password', 'Exchange.UserName') then '**********'
+              when NAME in   ('facebook.AppID', 'facebook.AppSecret') then '**********'
+              when NAME in   ('GoogleApps.ApiKey', 'GoogleApps.ClientSecret', 'GoogleMaps.Key') then '**********'
+              when NAME in   ('Twitter.AccessToken', 'Twitter.AccessTokenSecret', 'Twitter.ConsumerKey', 'Twitter.ConsumerSecret') then '**********'
+              when NAME in   ('LinkedIn.APIKey', 'LinkedIn.SecretKey') then '**********'
+              when NAME in   ('Salesforce.ConsumerKey', 'Salesforce.ConsumerSecret') then '**********'
+              when NAME in   ('QuickBooks.ConnectionString', 'QuickBooks.OAuthAccessToken', 'QuickBooks.OAuthAccessTokenSecret', 'QuickBooks.OAuthClientID', 'QuickBooks.OAuthClientSecret', 'QuickBooks.OAuthCompanyID', 'QuickBooks.OAuthCountryCode', 'QuickBooks.OAuthExpiresAt', 'QuickBooks.OAuthVerifier', 'QuickBooks.RemotePassword', 'QuickBooks.RemoteURL', 'QuickBooks.RemoteUser') then '**********'
+              when NAME in   ('PayTrace.UserName', 'PayTrace.Password') then '**********'
+              when NAME in   ('Asterisk.UserName', 'Asterisk.Password') then '**********'
+              when NAME in   ('Twilio.AccountSID', 'Twilio.AuthToken') then '**********'
+              when NAME in   ('Avaya.Certificate', 'Avaya.UserName', 'Avaya.Password') then '**********'
+              when NAME in   ('MicrosoftTranslator.ClientID', 'MicrosoftTranslator.ClientSecret', 'MicrosoftTranslator.Key') then '**********'
+              when NAME in   ('ZipTaxAPI.Key') then '**********'
+              when NAME in   ('HubSpot.ClientID', 'HubSpot.ClientSecret', 'HubSpot.OAuthAccessToken', 'HubSpot.OAuthClientSecret', 'HubSpot.OAuthExpiresAt', 'HubSpot.OAuthRefreshToken', 'HubSpot.PortalID') then '**********'
+              when NAME in   ('ConstantContact.ClientID', 'ConstantContact.ClientSecret', 'ConstantContact.OAuthAccessToken', 'ConstantContact.OAuthClientSecret', 'ConstantContact.OAuthExpiresAt', 'ConstantContact.OAuthRefreshToken') then '**********'
+              when NAME in   ('iContact.ApiAppId', 'iContact.ApiPassword', 'iContact.ApiUsername') then '**********'
+              when NAME in   ('Marketo.ClientID', 'Marketo.ClientSecret', 'Marketo.OAuthAccessToken', 'Marketo.OAuthClientSecret', 'Marketo.OAuthExpiresAt', 'Marketo.OAuthRefreshToken') then '**********'
+              when NAME in   ('MailChimp.ClientID', 'MailChimp.ClientSecret', 'MailChimp.OAuthAccessToken', 'MailChimp.OAuthClientSecret') then '**********'
+              when NAME in   ('CurrencyLayer.AccessKey') then '**********'
+              when NAME in   ('AuthorizeNet.UserName', 'AuthorizeNet.Password', 'AuthorizeNet.TransactionKey') then '**********'
+              when NAME in   ('Azure.AadClientId', 'Azure.AadTenantDomain', 'Azure.ServiceAccountPassword', 'Azure.ServiceAccountUserName', 'Azure.SqlAdminPassword', 'Azure.SqlAdminUserName', 'Azure.SubscriptionId', 'Azure.VmAdminPassword', 'Azure.VmAdminUserName') then '**********'
+              when NAME in   ('Pardot.ApiUsername', 'Pardot.ApiUserKey', 'Pardot.ApiPassword', 'Pardot.ApiAppId', 'Pardot.PardotAccountId', 'Pardot.PardotClientFolderId') then '**********'
+              when NAME in   ('GetResponse.SecretApiKey') then '**********'
+              when NAME in   ('SalesFusion.UserName', 'SalesFusion.Password', 'SalesFusion.Domain') then '**********'
+              when NAME in   ('Watson.ClientID', 'Watson.ClientSecret', 'Watson.OAuthAccessToken', 'Watson.OAuthRefreshToken', 'Watson.OAuthExpiresAt') then '**********'
+              when NAME in   ('FreshBooks.ApiToken') then '**********'
+              when NAME in   ('PhoneBurner.ClientSecret', 'PhoneBurner.OAuthAccessToken', 'PhoneBurner.OAuthClientSecret', 'PhoneBurner.OAuthExpiresAt', 'PhoneBurner.OAuthRefreshToken') then '**********'
+              when NAME in   ('enable_reminder_popdowns', 'enable_email_reminders', 'default_password') then '**********'
+              when NAME like '%Password'      then '**********'
+              when NAME like '%.UserName'     then '**********'
+              when NAME like '%.ClientSecret' then '**********'
+              when NAME like '%.ApiKey'       then '**********'
+              when NAME like '%.OAuth%'       then '**********'
+              when NAME like 'ADFS%'          then '**********'
+              else VALUE
+              end)
+        end) as VALUE
   from CONFIG
- where NAME not in   ('AmazonAWS.AccessKeyID', 'AmazonAWS.SecretAccessKey', 'AmazonAWS.X509Certificate', 'AmazonAWS.X509Password', 'AmazonAWS.X509PrivateKey')
-   and NAME not in   ('AmazonS3.AccessKeyID', 'AmazonS3.SecretAccessKey')
-   and NAME not in   ('CreditCardIV', 'CreditCardKey')
-   and NAME not in   ('InboundEmailIV', 'InboundEmailKey')
-   and NAME not in   ('PaymentGateway_Login', 'PaymentGateway_Password')
-   and NAME not in   ('PayPal.APIPassword', 'PayPal.APIUsername', 'PayPal.ClientID', 'PayPal.ClientSecret', 'PayPal.X509Certificate', 'PayPal.X509PrivateKey')
-   and NAME not in   ('smtpuser', 'smtppass', 'smtpcertificate')
-   and NAME not in   ('Exchange.ClientSecret', 'Exchange.Password', 'Exchange.UserName')
-   and NAME not in   ('facebook.AppID', 'facebook.AppSecret')
-   and NAME not in   ('GoogleApps.ApiKey', 'GoogleApps.ClientSecret', 'GoogleMaps.Key')
-   and NAME not in   ('Twitter.AccessToken', 'Twitter.AccessTokenSecret', 'Twitter.ConsumerKey', 'Twitter.ConsumerSecret')
-   and NAME not in   ('LinkedIn.APIKey', 'LinkedIn.SecretKey')
-   and NAME not in   ('Salesforce.ConsumerKey', 'Salesforce.ConsumerSecret')
-   and NAME not in   ('QuickBooks.ConnectionString', 'QuickBooks.OAuthAccessToken', 'QuickBooks.OAuthAccessTokenSecret', 'QuickBooks.OAuthClientID', 'QuickBooks.OAuthClientSecret', 'QuickBooks.OAuthCompanyID', 'QuickBooks.OAuthCountryCode', 'QuickBooks.OAuthExpiresAt', 'QuickBooks.OAuthVerifier', 'QuickBooks.RemotePassword', 'QuickBooks.RemoteURL', 'QuickBooks.RemoteUser')
-   and NAME not in   ('PayTrace.UserName', 'PayTrace.Password')
-   and NAME not in   ('Asterisk.UserName', 'Asterisk.Password')
-   and NAME not in   ('Twilio.AccountSID', 'Twilio.AuthToken')
-   and NAME not in   ('Avaya.Certificate', 'Avaya.UserName', 'Avaya.Password')
-   and NAME not in   ('MicrosoftTranslator.ClientID', 'MicrosoftTranslator.ClientSecret', 'MicrosoftTranslator.Key')
-   and NAME not in   ('ZipTaxAPI.Key')
-   and NAME not in   ('HubSpot.ClientID', 'HubSpot.ClientSecret', 'HubSpot.OAuthAccessToken', 'HubSpot.OAuthClientSecret', 'HubSpot.OAuthExpiresAt', 'HubSpot.OAuthRefreshToken', 'HubSpot.PortalID')
-   and NAME not in   ('ConstantContact.ClientID', 'ConstantContact.ClientSecret', 'ConstantContact.OAuthAccessToken', 'ConstantContact.OAuthClientSecret', 'ConstantContact.OAuthExpiresAt', 'ConstantContact.OAuthRefreshToken')
-   and NAME not in   ('iContact.ApiAppId', 'iContact.ApiPassword', 'iContact.ApiUsername')
-   and NAME not in   ('Marketo.ClientID', 'Marketo.ClientSecret', 'Marketo.OAuthAccessToken', 'Marketo.OAuthClientSecret', 'Marketo.OAuthExpiresAt', 'Marketo.OAuthRefreshToken')
-   and NAME not in   ('MailChimp.ClientID', 'MailChimp.ClientSecret', 'MailChimp.OAuthAccessToken', 'MailChimp.OAuthClientSecret')
-   and NAME not in   ('CurrencyLayer.AccessKey')
-   and NAME not in   ('AuthorizeNet.UserName', 'AuthorizeNet.Password', 'AuthorizeNet.TransactionKey')
-   and NAME not in   ('Azure.AadClientId', 'Azure.AadTenantDomain', 'Azure.ServiceAccountPassword', 'Azure.ServiceAccountUserName', 'Azure.SqlAdminPassword', 'Azure.SqlAdminUserName', 'Azure.SubscriptionId', 'Azure.VmAdminPassword', 'Azure.VmAdminUserName')
-   and NAME not in   ('Pardot.ApiUsername', 'Pardot.ApiUserKey', 'Pardot.ApiPassword', 'Pardot.ApiAppId', 'Pardot.PardotAccountId', 'Pardot.PardotClientFolderId')
-   and NAME not in   ('GetResponse.SecretApiKey')
-   and NAME not in   ('SalesFusion.UserName', 'SalesFusion.Password', 'SalesFusion.Domain')
-   and NAME not in   ('Watson.ClientID', 'Watson.ClientSecret', 'Watson.OAuthAccessToken', 'Watson.OAuthRefreshToken', 'Watson.OAuthExpiresAt')
-   and NAME not in   ('FreshBooks.ApiToken')
-   and NAME not in   ('PhoneBurner.ClientSecret', 'PhoneBurner.OAuthAccessToken', 'PhoneBurner.OAuthClientSecret', 'PhoneBurner.OAuthExpiresAt', 'PhoneBurner.OAuthRefreshToken')
-   and NAME not in   ('enable_reminder_popdowns', 'enable_email_reminders', 'default_password')
-   and NAME not like '%Password'
-   and NAME not like '%.UserName'
-   and NAME not like '%.ClientSecret'
-   and NAME not like '%.ApiKey'
-   and NAME not like '%.OAuth%'
-   and NAME not like 'ADFS%'
 GO
 
 Grant Select on dbo.vwCONFIG_Sync to public;

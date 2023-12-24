@@ -41,6 +41,7 @@ namespace SplendidWebApi.Controllers
 {
 	// 01/25/2022 Paul.  We are now using the Identity to take advantage of [Authorize] attribute. 
 	[Authorize]
+	[SplendidSessionAuthorize]
 	[ApiController]
 	//[Route("[controller]")]
 	[Route("[controller].svc")]
@@ -69,16 +70,17 @@ namespace SplendidWebApi.Controllers
 		private ModuleUtils.Audit                Audit            ;
 		private ModuleUtils.AuditPersonalInfo    AuditPersonalInfo;
 		private ActiveDirectory                  ActiveDirectory  ;
+		private ModuleUtils.Login                ModuleUtilsLogin ;
 
-		public RestController(IWebHostEnvironment hostingEnvironment, IMemoryCache memoryCache, HttpSessionState Session, Security Security, SplendidError SplendidError, SplendidCache SplendidCache, RestUtil RestUtil, SplendidDynamic SplendidDynamic, SplendidInit SplendidInit, SplendidCRM.Crm.Modules Modules, ModuleUtils.Audit Audit, ModuleUtils.AuditPersonalInfo AuditPersonalInfo, ActiveDirectory ActiveDirectory)
+		public RestController(IWebHostEnvironment hostingEnvironment, IMemoryCache memoryCache, HttpSessionState Session, Security Security, Sql Sql, SqlProcs SqlProcs, SplendidError SplendidError, SplendidCache SplendidCache, Utils Utils, RestUtil RestUtil, SplendidDynamic SplendidDynamic, SplendidInit SplendidInit, SplendidCRM.Crm.Modules Modules, ModuleUtils.Audit Audit, ModuleUtils.AuditPersonalInfo AuditPersonalInfo, ActiveDirectory ActiveDirectory, ArchiveUtils ArchiveUtils, ModuleUtils.Login Login)
 		{
 			this.hostingEnvironment  = hostingEnvironment ;
 			this.memoryCache         = memoryCache        ;
 			this.Session             = Session            ;
 			this.Security            = Security           ;
-			this.L10n                = new L10N(Sql.ToString(Session["USER_LANG"]));
-			this.Sql                 = new Sql(Session, Security);
-			this.SqlProcs            = new SqlProcs(Security, Sql);
+			this.L10n                = new L10N(Sql.ToString(Session["USER_SETTINGS/CULTURE"]));
+			this.Sql                 = Sql                ;
+			this.SqlProcs            = SqlProcs           ;
 			this.SplendidError       = SplendidError      ;
 			this.SplendidCache       = SplendidCache      ;
 			this.RestUtil            = RestUtil           ;
@@ -88,126 +90,111 @@ namespace SplendidWebApi.Controllers
 			this.Audit               = Audit              ;
 			this.AuditPersonalInfo   = AuditPersonalInfo  ;
 			this.ActiveDirectory     = ActiveDirectory    ;
+			this.ModuleUtilsLogin    = Login              ;
 		}
 
 		#region Scalar functions
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> Version()
+		public string Version()
 		{
-			// 03/10/2011 Paul.  We do not need to set the content type because the default is json. 
-			//WebOperationContext.Current.OutgoingResponse.ContentType = "application/json; charset=utf-8";
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", Sql.ToString(Application["SplendidVersion"]));
-			return d;
+			return Sql.ToString(Application["SplendidVersion"]);
 		}
 
 		[AllowAnonymous]
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> Edition()
+		public string Edition()
 		{
-			//WebOperationContext.Current.OutgoingResponse.ContentType = "application/json; charset=utf-8";
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", Sql.ToString(Application["CONFIG.service_level"]));
-			return d;
+			return Sql.ToString(Application["CONFIG.service_level"]);
 		}
 
 		[AllowAnonymous]
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> UtcTime()
+		public DateTime UtcTime()
 		{
-			//WebOperationContext.Current.OutgoingResponse.ContentType = "application/json; charset=utf-8";
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", DateTime.UtcNow);
-			return d;
+			return DateTime.UtcNow;
 		}
 
 		[AllowAnonymous]
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> IsAuthenticated()
+		public bool IsAuthenticated()
 		{
-			//WebOperationContext.Current.OutgoingResponse.ContentType = "application/json; charset=utf-8";
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", Security.IsAuthenticated());
-			return d;
+			return Security.IsAuthenticated();
 		}
 
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> GetUserID()
+		public Guid GetUserID()
 		{
 			Guid gUSER_ID = Guid.Empty;
 			if ( Security.IsAuthenticated() )
 				gUSER_ID = Security.USER_ID;
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", gUSER_ID.ToString());
-			return d;
+			return gUSER_ID;
 		}
 
 		// 07/15/2021 Paul.  React Client needs to access the ASP.NET_SessionId. 
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> GetUserSession()
+		public string GetUserSession()
 		{
 			string sUSER_SESSION = String.Empty;
 			if ( Security.IsAuthenticated() && Session != null )
 				sUSER_SESSION = Security.USER_SESSION;
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", sUSER_SESSION);
-			return d;
+			return sUSER_SESSION;
 		}
 
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> GetUserName()
+		public string GetUserName()
 		{
 			string sUSER_NAME = String.Empty;
 			if ( Security.IsAuthenticated() )
 				sUSER_NAME = Security.USER_NAME;
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", sUSER_NAME);
-			return d;
+			return sUSER_NAME;
 		}
 
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> GetTeamID()
+		public Guid GetTeamID()
 		{
 			Guid gTEAM_ID = Guid.Empty;
 			if ( Security.IsAuthenticated() )
 				gTEAM_ID = Security.TEAM_ID;
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", gTEAM_ID.ToString());
-			return d;
+			return gTEAM_ID;
 		}
 
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> GetTeamName()
+		public string GetTeamName()
 		{
 			string sTEAM_NAME = String.Empty;
 			if ( Security.IsAuthenticated() )
 				sTEAM_NAME = Security.TEAM_NAME;
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", sTEAM_NAME);
-			return d;
+			return sTEAM_NAME;
 		}
 
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> GetUserLanguage()
+		public string GetUserLanguage()
 		{
 			string sLANG = "en-US";
 			if ( Security.IsAuthenticated() )
 				sLANG = Sql.ToString(Session["USER_SETTINGS/CULTURE"]);
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", sLANG);
-			return d;
+			return sLANG;
 		}
 
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> GetUserProfile()
+		public SplendidCache.UserProfile GetUserProfile()
 		{
 			if ( Security.IsAuthenticated() )
 			{
 				// 05/27/2019 Paul.  Move GetUserProfile to cache for React client. 
 				SplendidCache.UserProfile profile = SplendidCache.GetUserProfile();
-				Dictionary<string, object> d = new Dictionary<string, object>();
-				d.Add("d", profile);
-				return d;
+				return profile;
 			}
 			else
 			{
@@ -219,11 +206,6 @@ namespace SplendidWebApi.Controllers
 		[ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
 		public Dictionary<string, object> GetMyUserProfile()
 		{
-			if ( !Security.IsAuthenticated() )
-			{
-				throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS")));
-			}
-			
 			StringBuilder sbDumpSQL = new StringBuilder();
 			// 12/16/2019 Paul.  Moved GetTable to ~/_code/RestUtil.cs
 			DataTable dt = new DataTable();
@@ -312,28 +294,23 @@ namespace SplendidWebApi.Controllers
 		}
 
 		[AllowAnonymous]
+		[DotNetLegacyData]
 		[HttpGet("[action]")]
 		[ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
 		public Dictionary<string, object> SingleSignOnSettings()
 		{
-			Dictionary<string, object> d = new Dictionary<string, object>();
 			// 06/24/2019 Paul.  Separate out so that the settings can be returned in GetReactLoginState. 
 			Dictionary<string, object> results = GetSingleSignOnSettings();
-			d.Add("d", results);
-			// 04/01/2020 Paul.  Move json utils to RestUtil. 
-			return d;
+			return results;
 		}
 
+		[DotNetLegacyData]
 		[HttpGet("[action]")]
-		public Dictionary<string, object> ArchiveViewExists([FromQuery] string VIEW_NAME)
+		public bool ArchiveViewExists([FromQuery] string VIEW_NAME)
 		{
 			bool bExists = false;
 			try
 			{
-				if ( !Security.IsAuthenticated() )
-				{
-					throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS")));
-				}
 				bExists = SplendidCache.ArchiveViewExists(VIEW_NAME);
 			}
 			catch(Exception ex)
@@ -341,13 +318,10 @@ namespace SplendidWebApi.Controllers
 				SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
 				throw(new Exception(ex.Message));
 			}
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", bExists);
-			return d;
+			return bExists;
 		}
 		#endregion
 
-		#region Login
 		public class LoginParameters
 		{
 			public string UserName     { get; set; }
@@ -356,10 +330,12 @@ namespace SplendidWebApi.Controllers
 			public bool   MobileClient { get; set; }
 		}
 
+		#region Login
 		[AllowAnonymous]
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
 		// 05/02/2017 Paul.  Need a separate flag for the mobile client. 
-		public async Task<Dictionary<string, object>> Login([FromBody] LoginParameters input)
+		public async Task<Guid> Login([FromBody] LoginParameters input)
 		{
 			// 11/05/2018 Paul.  Protect against null inputs. 
 			string sUSER_NAME   = Sql.ToString (input.UserName    );
@@ -374,16 +350,18 @@ namespace SplendidWebApi.Controllers
 				throw(new Exception(L10n.Term("Users.ERR_USER_LOCKED_OUT")));
 			}
 			// 04/16/2013 Paul.  Allow system to be restricted by IP Address. 
-			if ( SplendidInit.InvalidIPAddress(HttpContext.Connection.RemoteIpAddress.ToString()) )
+			// 08/19/2023 Paul.  RemoteIpAddress can be null. 
+			if ( !Sql.IsEmptyString(HttpContext.Connection.RemoteIpAddress) && SplendidInit.InvalidIPAddress(HttpContext.Connection.RemoteIpAddress.ToString()) )
 			{
 				throw(new Exception(L10n.Term("Users.ERR_INVALID_IP_ADDRESS")));
 			}
 
 			// 01/09/2017 Paul.  Add support for ADFS Single-Sign-On.  Using WS-Federation Desktop authentication (username/password). 
+			string sError = String.Empty;
 			if ( Sql.ToBoolean(Application["CONFIG.ADFS.SingleSignOn.Enabled"]) )
 			{
 				// 05/02/2017 Paul.  Need a separate flag for the mobile client. 
-				gUSER_ID = await ActiveDirectory.FederationServicesValidateJwt(sPASSWORD, bMOBILE_CLIENT);
+				gUSER_ID = ActiveDirectory.FederationServicesValidateJwt(sPASSWORD, bMOBILE_CLIENT, ref sError);
 				if ( !Sql.IsEmptyGuid(gUSER_ID) )
 				{
 					SplendidInit.LoginUser(gUSER_ID, "ASDF");
@@ -392,7 +370,7 @@ namespace SplendidWebApi.Controllers
 			else if ( Sql.ToBoolean(Application["CONFIG.Azure.SingleSignOn.Enabled"]) )
 			{
 				// 05/02/2017 Paul.  Need a separate flag for the mobile client. 
-				gUSER_ID = await ActiveDirectory.AzureValidateJwt(sPASSWORD, bMOBILE_CLIENT);
+				gUSER_ID = ActiveDirectory.AzureValidateJwt(sPASSWORD, bMOBILE_CLIENT, ref sError);
 				if ( !Sql.IsEmptyGuid(gUSER_ID) )
 				{
 					SplendidInit.LoginUser(gUSER_ID, "Azure AD");
@@ -492,32 +470,29 @@ namespace SplendidWebApi.Controllers
 			ClaimsPrincipal principal = new ClaimsPrincipal(identity);
 			await Microsoft.AspNetCore.Authentication.AuthenticationHttpContextExtensions.SignInAsync(HttpContext, CookieAuthenticationDefaults.AuthenticationScheme, principal);
 			
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", gUSER_ID.ToString());
-			return d;
+			return gUSER_ID;
 		}
 
-// 12/23/2021 TODO.  Login.SendForgotPasswordNotice
-#if false
 		// 02/18/2020 Paul.  Allow React Client to forget password. 
 		[AllowAnonymous]
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public string ForgotPassword(string UserName, string Email)
+		public string ForgotPassword([FromQuery] string UserName, [FromQuery] string Email)
 		{
 			string sUSER_NAME   = Sql.ToString(UserName);
 			string sEMAIL       = Sql.ToString(Email   );
 			
 			// 04/16/2013 Paul.  Allow system to be restricted by IP Address. 
-			if ( SplendidInit.InvalidIPAddress(HttpContext.Connection.RemoteIpAddress.ToString()) )
+			// 08/19/2023 Paul.  RemoteIpAddress can be null. 
+			if ( !Sql.IsEmptyString(HttpContext.Connection.RemoteIpAddress) && SplendidInit.InvalidIPAddress(HttpContext.Connection.RemoteIpAddress.ToString()) )
 			{
 				throw(new Exception(L10n.Term("Users.ERR_INVALID_IP_ADDRESS")));
 			}
 
 			// 10/30/2021 Paul.  Move SendForgotPasswordNotice to ModuleUtils. 
-			string sError = ModuleUtils.Login.SendForgotPasswordNotice(sUSER_NAME, sEMAIL);
+			string sError = ModuleUtilsLogin.SendForgotPasswordNotice(sUSER_NAME, sEMAIL);
 			return sError;
 		}
-#endif
 		
 		[HttpPost("[action]")]
 		public void Logout()
@@ -542,19 +517,18 @@ namespace SplendidWebApi.Controllers
 			// 01/25/2022 Paul.  We are now using the Identity to take advantage of [Authorize] attribute. 
 			Microsoft.AspNetCore.Authentication.AuthenticationHttpContextExtensions.SignOutAsync(HttpContext, CookieAuthenticationDefaults.AuthenticationScheme);
 		}
-#endregion
+		#endregion
 
 		#region React State
 		// 05/27/2019 Paul.  Separate call for the React client state. 
 		[AllowAnonymous]
+		[DotNetLegacyData]
 		[HttpGet("[action]")]
 		// https://docs.microsoft.com/en-us/aspnet/core/performance/caching/response?view=aspnetcore-6.0`
 		[ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
 		public Dictionary<string, object> GetReactLoginState()
 		{
-			Dictionary<string, object> d       = new Dictionary<string, object>();
 			Dictionary<string, object> results = new Dictionary<string, object>();
-			d.Add("d", results);
 			
 			Dictionary<string, object> CONFIG = SplendidCache.GetLoginConfig();
 			results.Add("CONFIG", CONFIG);
@@ -562,6 +536,11 @@ namespace SplendidWebApi.Controllers
 			Dictionary<string, object> TERMINOLOGY = SplendidCache.GetLoginTerminology();
 			results.Add("TERMINOLOGY", TERMINOLOGY);
 			
+			// 12/10/2022 Paul.  Allow Login Terminology Lists to be customized. 
+			List<string> lstLIST_NAME = new List<string>();
+			Dictionary<string, object> TERMINOLOGY_LISTS = SplendidCache.GetLoginTerminologyLists(lstLIST_NAME, TERMINOLOGY);
+			results.Add("TERMINOLOGY_LISTS", TERMINOLOGY_LISTS);
+
 			// 06/24/2019 Paul.  Separate out so that the settings can be returned in GetReactLoginState. 
 			Dictionary<string, object> objSingleSignOnSettings = GetSingleSignOnSettings();
 			results.Add("SingleSignOnSettings", objSingleSignOnSettings);
@@ -579,131 +558,10 @@ namespace SplendidWebApi.Controllers
 				sAUTHENTICATION = "Windows";
 			}
 			results.Add("AUTHENTICATION", sAUTHENTICATION);
-			//return JsonSerializer.Serialize(results);
-			return d;
-		}
 
-		[HttpGet("[action]")]
-		// https://docs.microsoft.com/en-us/aspnet/core/performance/caching/response?view=aspnetcore-6.0`
-		[ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-		public Dictionary<string, object> GetReactState()
-		{
-			if ( !Security.IsAuthenticated() )
-			{
-				throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS")));
-			}
-			Dictionary<string, object> d       = new Dictionary<string, object>();
-			Dictionary<string, object> results = new Dictionary<string, object>();
-			d.Add("d", results);
-			
-			// 03/02/2019 Paul.  Functions are now static and take modules list input so that they can be used in the Admin API. 
-			// 12/16/2019 Paul.  Moved GetTable to ~/_code/RestUtil.cs
-			List<string> lstMODULES = RestUtil.AccessibleModules();
-			
-			// 05/27/2019 Paul.  Move GetUserProfile to cache for React client. 
-			SplendidCache.UserProfile profile = SplendidCache.GetUserProfile();
-			results.Add("USER_PROFILE", profile);
-			
-			// 12/23/2019 Paul.  Return the team tree as an object tree instead of XML. 
-			results.Add("TEAM_TREE", SplendidCache.GetUserTeamTree());
-			
-			// 07/21/2019 Paul.  We need UserAccess control for buttons. 
-			Dictionary<string, object> MODULE_ACL_ACCESS = SplendidCache.GetModuleAccess(lstMODULES);
-			results.Add("MODULE_ACL_ACCESS", MODULE_ACL_ACCESS);
-			
-			Dictionary<string, object> ACL_ACCESS = SplendidCache.GetUserAccess(lstMODULES);
-			results.Add("ACL_ACCESS", ACL_ACCESS);
-			
-			Dictionary<string, object> ACL_FIELD_ACCESS = SplendidCache.GetUserFieldSecurity(lstMODULES);
-			results.Add("ACL_FIELD_ACCESS", ACL_FIELD_ACCESS);
-			
-			// 01/22/2021 Paul.  Some customizations may be dependent on role name. 
-			List<Dictionary<string, object>>  ACL_ROLES = SplendidCache.GetUserACLRoles();
-			results.Add("ACL_ROLES", ACL_ROLES);
-			
-			// 05/17/2019 Paul.  Return the modules so that we don't need a separate request for it later. 
-			Dictionary<string, object> CONFIG = SplendidCache.GetAllConfig();
-			results.Add("CONFIG", CONFIG);
-			
-			Dictionary<string, object> MODULES = SplendidCache.GetAllModules(lstMODULES);
-			results.Add("MODULES", MODULES);
-			
-			Dictionary<string, object> MODULE_COLUMNS = SplendidCache.GetAllSearchColumns(lstMODULES);
-			results.Add("MODULE_COLUMNS", MODULE_COLUMNS);
-			
-			// 05/26/2019 Paul.  Return Users and Teams in GetAllLayouts. 
-			Dictionary<string, object> USERS = SplendidCache.GetAllUsers();
-			results.Add("USERS", USERS);
-			
-			Dictionary<string, object> TEAMS = SplendidCache.GetAllTeams();
-			results.Add("TEAMS", TEAMS);
-			
-			// 05/16/2019 Paul.  Return the tab menu so that we don't need a separate request for it later. 
-			List<object> TAB_MENU = SplendidCache.GetAllTabMenus();
-			results.Add("TAB_MENU", TAB_MENU);
-			
-			// 02/22/2021 Paul.  The React client needs a way to determine the default sort, besides NAME asc. 
-			Dictionary<string, object> GRIDVIEWS = SplendidCache.GetAllGridViews(lstMODULES);
-			results.Add("GRIDVIEWS", GRIDVIEWS);
-			
-			Dictionary<string, object> GRIDVIEWS_COLUMNS = SplendidCache.GetAllGridViewsColumns(lstMODULES);
-			results.Add("GRIDVIEWS_COLUMNS", GRIDVIEWS_COLUMNS);
-			
-			Dictionary<string, object> DETAILVIEWS_FIELDS = SplendidCache.GetAllDetailViewsFields(lstMODULES);
-			results.Add("DETAILVIEWS_FIELDS", DETAILVIEWS_FIELDS);
-			
-			Dictionary<string, object> EDITVIEWS_FIELDS = SplendidCache.GetAllEditViewsFields(lstMODULES);
-			results.Add("EDITVIEWS_FIELDS", EDITVIEWS_FIELDS);
-			
-			Dictionary<string, object> DETAILVIEWS_RELATIONSHIPS = SplendidCache.GetAllDetailViewsRelationships(lstMODULES);
-			results.Add("DETAILVIEWS_RELATIONSHIPS", DETAILVIEWS_RELATIONSHIPS);
-			
-			Dictionary<string, object> EDITVIEWS_RELATIONSHIPS = SplendidCache.GetAllEditViewsRelationships(lstMODULES);
-			results.Add("EDITVIEWS_RELATIONSHIPS", EDITVIEWS_RELATIONSHIPS);
-			
-			Dictionary<string, object> DYNAMIC_BUTTONS = SplendidCache.GetAllDynamicButtons(lstMODULES);
-			results.Add("DYNAMIC_BUTTONS", DYNAMIC_BUTTONS);
-			
-			// 08/15/2019 Paul.  Add support for menu shortcuts. 
-			Dictionary<string, object> SHORTCUTS = SplendidCache.GetAllShortcuts(lstMODULES);
-			results.Add("SHORTCUTS", SHORTCUTS);
-			
-			// 03/26/2019 Paul.  Admin has more custom lists. 
-			Dictionary<string, object> TERMINOLOGY_LISTS = SplendidCache.GetAllTerminologyLists(false);
-			results.Add("TERMINOLOGY_LISTS", TERMINOLOGY_LISTS);
-			
-			// 03/26/2019 Paul.  Admin has more custom lists. 
-			Dictionary<string, object> TERMINOLOGY = SplendidCache.GetAllTerminology(lstMODULES, false);
-			results.Add("TERMINOLOGY", TERMINOLOGY);
-			
-			// 07/01/2019 Paul.  The SubPanelsView needs to understand how to manage all relationships. 
-			Dictionary<string, object> RELATIONSHIPS = SplendidCache.GetAllRelationships();
-			results.Add("RELATIONSHIPS", RELATIONSHIPS);
-			
-			// 09/12/2019 Paul.  User Profile needs the timezones and currencies. 
-			Dictionary<string, object> TIMEZONES = SplendidCache.GetAllTimezones();
-			results.Add("TIMEZONES", TIMEZONES);
-			
-			Dictionary<string, object> CURRENCIES = SplendidCache.GetAllCurrencies();
-			results.Add("CURRENCIES", CURRENCIES);
-			
-			Dictionary<string, object> LANGUAGES = SplendidCache.GetAllLanguages();
-			results.Add("LANGUAGES", LANGUAGES);
-			
-			Dictionary<string, object> LAST_VIEWED = SplendidCache.GetAllLastViewed();
-			results.Add("LAST_VIEWED", LAST_VIEWED);
-			
-			Dictionary<string, object> SAVED_SEARCH = SplendidCache.GetAllSavedSearch(lstMODULES);
-			results.Add("SAVED_SEARCH", SAVED_SEARCH);
-			
-			// 05/24/2019 Paul.  Return Dashboard in GetAllLayouts. 
-			Dictionary<string, object> DASHBOARDS = SplendidCache.GetAllDashboards();
-			results.Add("DASHBOARDS", DASHBOARDS);
-			
-			Dictionary<string, object> DASHBOARDS_PANELS = SplendidCache.GetAllDashboardPanels(lstMODULES);
-			results.Add("DASHBOARDS_PANELS", DASHBOARDS_PANELS);
-			
-			// 08/09/2020 Paul.  Convert to comma separated string. 
+			// 12/07/2022 Paul.  Allow the LoginView to be customized. 
+			List<string> lstMODULES = new List<string>();
+			lstMODULES.Add("Home");
 			string sModuleList = String.Join(",", lstMODULES.ToArray());
 			Dictionary<string, object> objs = memoryCache.Get("ReactCustomViews." + sModuleList) as Dictionary<string, object>;
 #if DEBUG
@@ -712,15 +570,230 @@ namespace SplendidWebApi.Controllers
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
-				SplendidCache.GetAllReactCustomViews(objs, lstMODULES, "~/React/src/CustomViewsJS", false);
-				// 05/23/2019 Paul.  Include Dashlet views, but we do not yet have a way to separate by module. 
-				SplendidCache.GetAllReactDashletViews(objs, lstMODULES, "~/React/src/DashletsJS");
+				SplendidCache.GetAllReactCustomViews(objs, lstMODULES, "~/React/src/CustomViewsJS", false, true);
 				memoryCache.Set("ReactCustomViews." + sModuleList, objs, SplendidCache.DefaultCacheExpiration());
 			}
 			results.Add("REACT_CUSTOM_VIEWS", objs);
-			// 07/12/2021 Paul.  Attempt to track timeout so that we can determine stale React state. 
-			results.Add("SessionStateTimeout", HttpSessionState.Timeout);
-			return d;
+			return results;
+		}
+
+		[DotNetLegacyData]
+		[HttpGet("[action]")]
+		// https://docs.microsoft.com/en-us/aspnet/core/performance/caching/response?view=aspnetcore-6.0`
+		[ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+		public Dictionary<string, object> GetReactState()
+		{
+			Dictionary<string, object> results = new Dictionary<string, object>();
+			
+			// 03/02/2019 Paul.  Functions are now static and take modules list input so that they can be used in the Admin API. 
+			// 12/16/2019 Paul.  Moved GetTable to ~/_code/RestUtil.cs
+			List<string> lstMODULES = RestUtil.AccessibleModules();
+			
+			// 02/18/2023 Paul.  Gather metrics.  Noticed odd slowless with SQL 2019. 
+			DateTime dtStart = DateTime.Now;
+			Dictionary<string, double> metrics = new Dictionary<string, double>();
+			try
+			{
+				// 05/27/2019 Paul.  Move GetUserProfile to cache for React client. 
+				SplendidCache.UserProfile profile = SplendidCache.GetUserProfile();
+				results.Add("USER_PROFILE", profile);
+				metrics.Add("USER_PROFILE", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 12/23/2019 Paul.  Return the team tree as an object tree instead of XML. 
+				results.Add("TEAM_TREE", SplendidCache.GetUserTeamTree());
+				metrics.Add("TEAM_TREE", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 07/21/2019 Paul.  We need UserAccess control for buttons. 
+				Dictionary<string, object> MODULE_ACL_ACCESS = SplendidCache.GetModuleAccess(lstMODULES);
+				results.Add("MODULE_ACL_ACCESS", MODULE_ACL_ACCESS);
+				metrics.Add("MODULE_ACL_ACCESS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> ACL_ACCESS = SplendidCache.GetUserAccess(lstMODULES);
+				results.Add("ACL_ACCESS", ACL_ACCESS);
+				metrics.Add("ACL_ACCESS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> ACL_FIELD_ACCESS = SplendidCache.GetUserFieldSecurity(lstMODULES);
+				results.Add("ACL_FIELD_ACCESS", ACL_FIELD_ACCESS);
+				metrics.Add("ACL_FIELD_ACCESS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 01/22/2021 Paul.  Some customizations may be dependent on role name. 
+				List<Dictionary<string, object>>  ACL_ROLES = SplendidCache.GetUserACLRoles();
+				results.Add("ACL_ROLES", ACL_ROLES);
+				metrics.Add("ACL_ROLES", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 05/17/2019 Paul.  Return the modules so that we don't need a separate request for it later. 
+				Dictionary<string, object> CONFIG = SplendidCache.GetAllConfig();
+				// 06/10/2023 Paul.  Core app does not support classic UI. 
+				CONFIG["disable_admin_classic"] = true;
+				// 06/19/2023 Paul.  Separate implementation for SignalR on ASP.NET Core. 
+				CONFIG["SignalR.Core"] = true;
+				results.Add("CONFIG", CONFIG);
+				metrics.Add("CONFIG", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> MODULES = SplendidCache.GetAllModules(lstMODULES);
+				results.Add("MODULES", MODULES);
+				metrics.Add("MODULES", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> MODULE_COLUMNS = SplendidCache.GetAllSearchColumns(lstMODULES);
+				results.Add("MODULE_COLUMNS", MODULE_COLUMNS);
+				metrics.Add("MODULE_COLUMNS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 05/26/2019 Paul.  Return Users and Teams in GetAllLayouts. 
+				Dictionary<string, object> USERS = SplendidCache.GetAllUsers();
+				results.Add("USERS", USERS);
+				metrics.Add("USERS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> TEAMS = SplendidCache.GetAllTeams();
+				results.Add("TEAMS", TEAMS);
+				metrics.Add("TEAMS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 05/16/2019 Paul.  Return the tab menu so that we don't need a separate request for it later. 
+				List<object> TAB_MENU = SplendidCache.GetAllTabMenus();
+				results.Add("TAB_MENU", TAB_MENU);
+				metrics.Add("TAB_MENU", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 02/22/2021 Paul.  The React client needs a way to determine the default sort, besides NAME asc. 
+				Dictionary<string, object> GRIDVIEWS = SplendidCache.GetAllGridViews(lstMODULES);
+				results.Add("GRIDVIEWS", GRIDVIEWS);
+				metrics.Add("GRIDVIEWS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> GRIDVIEWS_COLUMNS = SplendidCache.GetAllGridViewsColumns(lstMODULES);
+				results.Add("GRIDVIEWS_COLUMNS", GRIDVIEWS_COLUMNS);
+				metrics.Add("GRIDVIEWS_COLUMNS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> DETAILVIEWS_FIELDS = SplendidCache.GetAllDetailViewsFields(lstMODULES);
+				results.Add("DETAILVIEWS_FIELDS", DETAILVIEWS_FIELDS);
+				metrics.Add("DETAILVIEWS_FIELDS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> EDITVIEWS_FIELDS = SplendidCache.GetAllEditViewsFields(lstMODULES);
+				results.Add("EDITVIEWS_FIELDS", EDITVIEWS_FIELDS);
+				metrics.Add("EDITVIEWS_FIELDS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> DETAILVIEWS_RELATIONSHIPS = SplendidCache.GetAllDetailViewsRelationships(lstMODULES);
+				results.Add("DETAILVIEWS_RELATIONSHIPS", DETAILVIEWS_RELATIONSHIPS);
+				metrics.Add("DETAILVIEWS_RELATIONSHIPS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> EDITVIEWS_RELATIONSHIPS = SplendidCache.GetAllEditViewsRelationships(lstMODULES);
+				results.Add("EDITVIEWS_RELATIONSHIPS", EDITVIEWS_RELATIONSHIPS);
+				metrics.Add("EDITVIEWS_RELATIONSHIPS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> DYNAMIC_BUTTONS = SplendidCache.GetAllDynamicButtons(lstMODULES);
+				results.Add("DYNAMIC_BUTTONS", DYNAMIC_BUTTONS);
+				metrics.Add("DYNAMIC_BUTTONS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 08/15/2019 Paul.  Add support for menu shortcuts. 
+				Dictionary<string, object> SHORTCUTS = SplendidCache.GetAllShortcuts(lstMODULES);
+				results.Add("SHORTCUTS", SHORTCUTS);
+				metrics.Add("SHORTCUTS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 03/26/2019 Paul.  Admin has more custom lists. 
+				Dictionary<string, object> TERMINOLOGY_LISTS = SplendidCache.GetAllTerminologyLists(false);
+				results.Add("TERMINOLOGY_LISTS", TERMINOLOGY_LISTS);
+				metrics.Add("TERMINOLOGY_LISTS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 03/26/2019 Paul.  Admin has more custom lists. 
+				Dictionary<string, object> TERMINOLOGY = SplendidCache.GetAllTerminology(lstMODULES, false);
+				results.Add("TERMINOLOGY", TERMINOLOGY);
+				metrics.Add("TERMINOLOGY", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 07/01/2019 Paul.  The SubPanelsView needs to understand how to manage all relationships. 
+				Dictionary<string, object> RELATIONSHIPS = SplendidCache.GetAllRelationships();
+				results.Add("RELATIONSHIPS", RELATIONSHIPS);
+				metrics.Add("RELATIONSHIPS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 09/12/2019 Paul.  User Profile needs the timezones and currencies. 
+				Dictionary<string, object> TIMEZONES = SplendidCache.GetAllTimezones();
+				results.Add("TIMEZONES", TIMEZONES);
+				metrics.Add("TIMEZONES", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> CURRENCIES = SplendidCache.GetAllCurrencies();
+				results.Add("CURRENCIES", CURRENCIES);
+				metrics.Add("CURRENCIES", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> LANGUAGES = SplendidCache.GetAllLanguages();
+				results.Add("LANGUAGES", LANGUAGES);
+				metrics.Add("LANGUAGES", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> LAST_VIEWED = SplendidCache.GetAllLastViewed();
+				results.Add("LAST_VIEWED", LAST_VIEWED);
+				metrics.Add("LAST_VIEWED", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> SAVED_SEARCH = SplendidCache.GetAllSavedSearch(lstMODULES);
+				results.Add("SAVED_SEARCH", SAVED_SEARCH);
+				metrics.Add("SAVED_SEARCH", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 05/24/2019 Paul.  Return Dashboard in GetAllLayouts. 
+				Dictionary<string, object> DASHBOARDS = SplendidCache.GetAllDashboards();
+				results.Add("DASHBOARDS", DASHBOARDS);
+				metrics.Add("DASHBOARDS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				Dictionary<string, object> DASHBOARDS_PANELS = SplendidCache.GetAllDashboardPanels(lstMODULES);
+				results.Add("DASHBOARDS_PANELS", DASHBOARDS_PANELS);
+				metrics.Add("DASHBOARDS_PANELS", (DateTime.Now - dtStart).TotalSeconds);
+				dtStart = DateTime.Now;
+			
+				// 08/09/2020 Paul.  Convert to comma separated string. 
+				string sModuleList = String.Join(",", lstMODULES.ToArray());
+				Dictionary<string, object> objs = memoryCache.Get("ReactCustomViews." + sModuleList) as Dictionary<string, object>;
+#if DEBUG
+				objs = null;
+#endif
+				if ( objs == null )
+				{
+					objs = new Dictionary<string, object>();
+					// 12/07/2022 Paul.  Allow the LoginView to be customized. 
+					SplendidCache.GetAllReactCustomViews(objs, lstMODULES, "~/React/src/CustomViewsJS", false, false);
+					// 05/23/2019 Paul.  Include Dashlet views, but we do not yet have a way to separate by module. 
+					SplendidCache.GetAllReactDashletViews(objs, lstMODULES, "~/React/src/DashletsJS");
+					memoryCache.Set("ReactCustomViews." + sModuleList, objs, SplendidCache.DefaultCacheExpiration());
+				}
+				results.Add("REACT_CUSTOM_VIEWS", objs);
+				metrics.Add("REACT_CUSTOM_VIEWS", (DateTime.Now - dtStart).TotalSeconds);
+				results.Add("Metrics", metrics);
+				// 07/12/2021 Paul.  Attempt to track timeout so that we can determine stale React state. 
+				//results.Add("SessionStateTimeout", Session.Timeout);
+			}
+			catch(Exception ex)
+			{
+				Debug.WriteLine(ex.Message);
+				StringBuilder sb = new StringBuilder();
+				foreach ( string key in metrics.Keys )
+				{
+					sb.AppendLine("  " + key + Strings.Space(30 - key.Length) + ": " + metrics[key].ToString() + " sec");
+				}
+				Debug.Write(sb.ToString());
+				throw(new Exception(ex.Message + ControlChars.CrLf + sb.ToString()));
+			}
+			return results;
 		}
 		#endregion
 
@@ -733,11 +806,6 @@ namespace SplendidWebApi.Controllers
 			if ( Sql.IsEmptyString(ListName) )
 				throw(new Exception("The list name must be specified."));
 			// 08/22/2011 Paul.  Add admin control to REST API. 
-			if ( !Security.IsAuthenticated() )
-			{
-				throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS")));
-			}
-			
 			DataTable dt = new DataTable();
 			dt.Columns.Add("NAME"        );
 			dt.Columns.Add("DISPLAY_NAME");
@@ -880,7 +948,7 @@ namespace SplendidWebApi.Controllers
 
 		// 05/25/2017 Paul.  Add support for Post operation so that we can support large Search operations in the new Dashboard. 
 		[HttpPost("[action]")]
-		public Dictionary<string, object> PostModuleTable([FromBody] IDictionary<string, object> dict)
+		public Dictionary<string, object> PostModuleTable([FromBody] Dictionary<string, object> dict)
 		{
 			string TableName         = Sql.ToString (Request.Query["TableName" ]);
 			int    nSKIP             = Sql.ToInteger(Request.Query["$skip"     ]);
@@ -1018,10 +1086,6 @@ namespace SplendidWebApi.Controllers
 				// 05/21/2017 Paul.  Need to prevent two types. 
 				// https://www.visualstudio.com/en-us/docs/report/analytics/aggregated-data-analytics
 				throw(new Exception("$groupby and $apply cannot both be specified. "));
-			}
-			if ( !Security.IsAuthenticated() )
-			{
-				throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS")));
 			}
 			// 08/22/2011 Paul.  Add admin control to REST API. 
 			string sMODULE_NAME = Sql.ToString(Application["Modules." + TableName + ".ModuleName"]);
@@ -1203,7 +1267,7 @@ namespace SplendidWebApi.Controllers
 		// 08/17/2019 Paul.  Post version so that we can support large filter requests.  This is common with the UnifiedSearch. 
 		// 08/17/2019 Paul.  Must use stream and 'application/octet-stream'. 
 		[HttpPost("[action]")]
-		public Dictionary<string, object> PostModuleList([FromBody] IDictionary<string, object> dict)
+		public Dictionary<string, object> PostModuleList([FromBody] Dictionary<string, object> dict)
 		{
 			string ModuleName        = Sql.ToString (Request.Query["ModuleName"]);
 			int    nSKIP             = Sql.ToInteger(Request.Query["$skip"     ]);
@@ -1349,7 +1413,7 @@ namespace SplendidWebApi.Controllers
 #if false
 		// 12/15/2019 Paul.  Export needs to follow the same parsing rules as PostModuleList. 
 		[HttpPost("[action]")]
-		public Dictionary<string, object> ExportModuleList([FromBody] IDictionary<string, object> dict)
+		public Dictionary<string, object> ExportModuleList([FromBody] Dictionary<string, object> dict)
 		{
 			string ModuleName        = Sql.ToString (Request.Query["ModuleName"]);
 			int    nSKIP             = Sql.ToInteger(Request.Query["$skip"     ]);
@@ -1570,8 +1634,7 @@ namespace SplendidWebApi.Controllers
 					}
 					break;
 				}
-				//case "xml"  :
-				default     :
+				case "xml"  :
 				{
 					sContentType = "text/xml";
 					sExportTempFileName = Guid.NewGuid().ToString() + "_" + ModuleName + ".xml";
@@ -1585,8 +1648,6 @@ namespace SplendidWebApi.Controllers
 					}
 					break;
 				}
-// 12/20/2021 TODO.  Export Excel. 
-#if !SplendidApp
 				//case "Excel":
 				default     :
 				{
@@ -1603,7 +1664,6 @@ namespace SplendidWebApi.Controllers
 					}
 					break;
 				}
-#endif
 			}
 			Dictionary<string, object> dictResponse = new Dictionary<string, object>();
 			Dictionary<string, object> d = new Dictionary<string, object>();
@@ -1623,7 +1683,6 @@ namespace SplendidWebApi.Controllers
 			return dictResponse;
 		}
 #endif
-
 		[HttpGet("[action]")]
 		[ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
 		public Dictionary<string, object> GetModuleItem([FromQuery] string ModuleName, [FromQuery] Guid ID)
@@ -1927,7 +1986,6 @@ namespace SplendidWebApi.Controllers
 			int nACLACCESS = Security.GetUserAccess(ModuleName, "edit");
 			if ( !Security.IsAuthenticated() || !Sql.ToBoolean(Application["Modules." + ModuleName + ".RestEnabled"]) || nACLACCESS < 0 )
 			{
-				L10N L10n = new L10N(Sql.ToString(Session["USER_SETTINGS/CULTURE"]));
 				throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS") + ": " + ModuleName));
 			}
 			Guid gCURRENCY_ID = Sql.ToGuid(Session["USER_SETTINGS/CURRENCY"]);
@@ -2151,22 +2209,18 @@ namespace SplendidWebApi.Controllers
 		#endregion
 
 		#region Update
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
 		// 03/13/2011 Paul.  Must use octet-stream instead of json, outherwise we get the following error. 
 		// Incoming message for operation 'CreateRecord' (contract 'AddressService' with namespace 'http://tempuri.org/') contains an unrecognized http body format value 'Json'. 
 		// The expected body format value is 'Raw'. This can be because a WebContentTypeMapper has not been configured on the binding. See the documentation of WebContentTypeMapper for more details.
 		//xhr.setRequestHeader('content-type', 'application/octet-stream');
 		// 02/07/2022 Paul.  Must follow old convention of returning value under d.  { d: value }
-		public Dictionary<string, object> UpdateModuleTable([FromBody] Dictionary<string, object> dict)
+		public Guid UpdateModuleTable([FromBody] Dictionary<string, object> dict)
 		{
 			string sTableName = Sql.ToString(Request.Query["TableName"]);
 			if ( Sql.IsEmptyString(sTableName) )
 				throw(new Exception("The table name must be specified."));
-			if ( !Security.IsAuthenticated() )
-			{
-				throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS")));
-			}
-			
 			// 08/22/2011 Paul.  Add admin control to REST API. 
 			string sMODULE_NAME = Sql.ToString(Application["Modules." + sTableName + ".ModuleName"]);
 			// 08/22/2011 Paul.  Not all tables will have a module name, such as relationship tables. 
@@ -2183,14 +2237,13 @@ namespace SplendidWebApi.Controllers
 			
 			// 04/01/2020 Paul.  Move UpdateTable to RestUtil. 
 			Guid gID = RestUtil.UpdateTable(sTableName, dict);
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", gID.ToString());
-			return d;
+			return gID;
 		}
 
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
 		// 02/07/2022 Paul.  Must follow old convention of returning value under d.  { d: value }
-		public Dictionary<string, object> UpdateModule([FromBody] Dictionary<string, object> dict)
+		public Guid UpdateModule([FromBody] Dictionary<string, object> dict)
 		{
 			string sModuleName = Sql.ToString(Request.Query["ModuleName"]);
 			if ( Sql.IsEmptyString(sModuleName) )
@@ -2235,9 +2288,7 @@ namespace SplendidWebApi.Controllers
 					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
 				}
 			}
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", gID.ToString());
-			return d;
+			return gID;
 		}
 
 		// 04/01/2020 Paul.  Move UpdateTable to RestUtil. 
@@ -2651,15 +2702,6 @@ namespace SplendidWebApi.Controllers
 				// 09/06/2017 Paul.  Include module name in error. 
 				throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS") + ": " + Sql.ToString(RelatedModule)));
 			}
-			// 02/27/2021 Paul.  We need to correct for singulare table names, whereby the views and procedures are plural. 
-			if ( sTABLE_NAME == "PROJECT" )
-				sTABLE_NAME = "PROJECTS";
-			else if ( sTABLE_NAME == "PROJECT_TASK" )
-				sTABLE_NAME = "PROJECT_TASKS";
-			if ( sRELATED_TABLE == "PROJECT" )
-				sRELATED_TABLE = "PROJECTS";
-			else if ( sRELATED_TABLE == "PROJECT_TASK" )
-				sRELATED_TABLE = "PROJECT_TASKS";
 			
 			string sRELATIONSHIP_TABLE = sTABLE_NAME + "_" + sRELATED_TABLE;
 			string sMODULE_FIELD_NAME  = SplendidCRM.Crm.Modules.SingularTableName(sTABLE_NAME   ) + "_ID";
@@ -2985,29 +3027,6 @@ namespace SplendidWebApi.Controllers
 			else if ( sRELATIONSHIP_TABLE == "ACL_ROLES_USERS" && sMODULE_FIELD_NAME == "ACL_ROLE_ID" )
 			{
 				sMODULE_FIELD_NAME = "ROLE_ID";
-			}
-			// 08/23/2021 Paul.  Correct azure relationships. 
-			else if ( sRELATIONSHIP_TABLE == "AZURE_ORDERS_AZURE_APP_UPDATES" )
-			{
-				sRELATIONSHIP_TABLE = "AZURE_APP_UPDATES_ORDERS";
-				sRELATED_FIELD_NAME = "APP_UPDATE_ID";
-			}
-			else if ( sRELATIONSHIP_TABLE == "AZURE_APP_UPDATES_AZURE_ORDERS" )
-			{
-				sRELATIONSHIP_TABLE = "AZURE_APP_UPDATES_ORDERS";
-				sMODULE_FIELD_NAME  = "APP_UPDATE_ID";
-			}
-			else if ( sRELATIONSHIP_TABLE == "AZURE_APP_PRICES_AZURE_SERVICE_LEVELS" )
-			{
-				sRELATIONSHIP_TABLE = "AZURE_APP_SERVICE_LEVELS";
-				sMODULE_FIELD_NAME  = "APP_PRICE_ID";
-				sRELATED_FIELD_NAME = "SERVICE_LEVEL_ID";
-			}
-			else if ( sRELATIONSHIP_TABLE == "AZURE_SERVICE_LEVELS_AZURE_APP_PRICES" )
-			{
-				sRELATIONSHIP_TABLE = "AZURE_APP_SERVICE_LEVELS";
-				sMODULE_FIELD_NAME  = "SERVICE_LEVEL_ID";
-				sRELATED_FIELD_NAME = "APP_PRICE_ID";
 			}
 			
 			// 06/04/2011 Paul.  For relationships, we first need to check the access rights of the parent record. 
@@ -3432,10 +3451,16 @@ namespace SplendidWebApi.Controllers
 
 // 12/24/2021 TODO.  Not sure if we want to support SendEmail. 
 #if false
+		public class UpdateEmailReadStatusParameters
+		{
+			public Guid     ID            { get; set; }
+		}
+
 		// 11/05/2020 Paul.  Although we could be more flexible and allow any email status, we really only need to set to read if unread. 
 		[HttpPost("[action]")]
-		public void UpdateEmailReadStatus(Guid ID)
+		public void UpdateEmailReadStatus([FromBody] UpdateEmailReadStatusParameters input)
 		{
+			Guid ID = Sql.ToGuid(input.ID);
 			string ModuleName = "Emails";
 			if ( Sql.IsEmptyString(ModuleName) )
 				throw(new Exception("The module name must be specified."));
@@ -3449,8 +3474,12 @@ namespace SplendidWebApi.Controllers
 			using ( IDbConnection con = dbf.CreateConnection() )
 			{
 				string sSQL ;
-				sSQL = "select NAME        " + ControlChars.CrLf
-				    + "  from vwEMAILS_Edit" + ControlChars.CrLf;
+				// 06/18/2023 Paul.  Was not including TYPE or STATUS. 
+				sSQL = "select ID           " + ControlChars.CrLf
+				     + "     , NAME         " + ControlChars.CrLf
+				     + "     , TYPE         " + ControlChars.CrLf
+				     + "     , STATUS       " + ControlChars.CrLf
+				     + "  from vwEMAILS_Edit" + ControlChars.CrLf;
 				using ( IDbCommand cmd = con.CreateCommand() )
 				{
 					cmd.CommandText = sSQL;
@@ -3481,8 +3510,9 @@ namespace SplendidWebApi.Controllers
 		}
 
 		// 01/24/2021 Paul.  Allow SendEmail from React Client. 
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
-		public Dictionary<string, object> SendEmail(Guid ID)
+		public string SendEmail([FromQuery] Guid ID)
 		{
 			string ModuleName = "Emails";
 			if ( Sql.IsEmptyString(ModuleName) )
@@ -3542,14 +3572,16 @@ namespace SplendidWebApi.Controllers
 								try
 								{
 									sSTATUS = "draft";
-									SqlProcs.spEMAILS_UpdateStatus(ID, sSTATUS);
+									// 06/18/2023 Paul.  Don't update unless necessary. 
+									if ( Sql.ToString(dt.Rows[0]["STATUS"]) != sSTATUS )
+										SqlProcs.spEMAILS_UpdateStatus(ID, sSTATUS);
 									// 07/10/2010 Paul.  The Offline Client cannot send emails.  Just mark as draft & out. 
 									// It should get sent when it is copied to the server. 
 									// 12/20/2007 Paul.  SendEmail was moved to EmailUtils.
 									// 05/19/2008 Paul.  Application is a required parameter so that SendEmail can be called within the scheduler. 
 									// 11/05/2010 Paul.  Each user can have their own email account, but they all will share the same server. 
 									// Remove all references to USER_SETTINGS/MAIL_FROMADDRESS and USER_SETTINGS/MAIL_FROMNAME. 
-									EmailUtils.SendEmail(HttpContext.Current, ID, Security.FULL_NAME, Security.EMAIL1, ref nEmailsSent);
+									EmailUtils.SendEmail(ID, Security.FULL_NAME, Security.EMAIL1, ref nEmailsSent);
 									sSTATUS = "sent";
 									SqlProcs.spEMAILS_UpdateStatus(ID, sSTATUS);
 								}
@@ -3582,9 +3614,7 @@ namespace SplendidWebApi.Controllers
 					}
 				}
 			}
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", sSTATUS);
-			return d;
+			return sSTATUS;
 		}
 #endif
 
@@ -3766,24 +3796,23 @@ namespace SplendidWebApi.Controllers
 		[HttpPost("[action]")]
 		public void ChangePassword([FromBody] ChangePasswordParameters input)
 		{
+			Guid     USER_ID      = Sql.ToGuid  (input.USER_ID     );
+			string   OLD_PASSWORD = Sql.ToString(input.OLD_PASSWORD);
+			string   NEW_PASSWORD = Sql.ToString(input.NEW_PASSWORD);
 			try
 			{
-				if ( !Security.IsAuthenticated() )
-				{
-					throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS")));
-				}
 				// 01/10/2022 Paul.  Only an admin can change the password for another user. 
-				else if ( Sql.IsEmptyGuid(input.USER_ID) )
+				if ( Sql.IsEmptyGuid(USER_ID) )
 				{
 					throw(new Exception(L10n.Term(".ERR_MISSING_REQUIRED_FIELDS")));
 				}
-				else if ( Sql.IsEmptyString(input.NEW_PASSWORD) )
+				else if ( Sql.IsEmptyString(NEW_PASSWORD) )
 				{
 					throw(new Exception(L10n.Term(".ERR_MISSING_REQUIRED_FIELDS")));
 				}
 				else if ( !(Security.AdminUserAccess("Users", "edit") >= 0) )
 				{
-					if ( input.USER_ID != Security.USER_ID )
+					if ( USER_ID != Security.USER_ID )
 					{
 						throw(new Exception(L10n.Term(".LBL_INSUFFICIENT_ACCESS")));
 					}
@@ -3803,7 +3832,7 @@ namespace SplendidWebApi.Controllers
 					using ( IDbCommand cmd = con.CreateCommand() )
 					{
 						cmd.CommandText = sSQL;
-						Sql.AddParameter(cmd, "@ID", input.USER_ID);
+						Sql.AddParameter(cmd, "@ID", USER_ID);
 						// 01/10/2022 Paul.  Validate the USER_ID on the fist pass. 
 						using ( IDataReader rdr = cmd.ExecuteReader(CommandBehavior.SingleRow) )
 						{
@@ -3819,9 +3848,9 @@ namespace SplendidWebApi.Controllers
 						if ( !(Security.AdminUserAccess("Users", "view") >= 0) )
 						{
 							// 02/13/2009 Paul.  We need to allow a user with a blank password to change his password. 
-							if ( !Sql.IsEmptyString(input.OLD_PASSWORD) )
+							if ( !Sql.IsEmptyString(OLD_PASSWORD) )
 							{
-								string sUSER_HASH = Security.HashPassword(input.OLD_PASSWORD);
+								string sUSER_HASH = Security.HashPassword(OLD_PASSWORD);
 								cmd.CommandText += "   and USER_HASH = @USER_HASH" + ControlChars.CrLf;
 								Sql.AddParameter(cmd, "@USER_HASH", sUSER_HASH);
 							}
@@ -3866,9 +3895,9 @@ namespace SplendidWebApi.Controllers
 					ctlNEW_PASSWORD_STRENGTH.MessageSatisfied                    = L10n.Term("Users.LBL_PASSWORD_SATISFIED"           );
 
 					string sPASSWORD_REQUIREMENTS = String.Empty;
-					if ( ctlNEW_PASSWORD_STRENGTH.IsValid(input.NEW_PASSWORD, ref sPASSWORD_REQUIREMENTS) )
+					if ( ctlNEW_PASSWORD_STRENGTH.IsValid(NEW_PASSWORD, ref sPASSWORD_REQUIREMENTS) )
 					{
-						string sUSER_HASH = Security.HashPassword(input.NEW_PASSWORD);
+						string sUSER_HASH = Security.HashPassword(NEW_PASSWORD);
 						using ( IDbConnection con = dbf.CreateConnection() )
 						{
 							con.Open();
@@ -3881,12 +3910,12 @@ namespace SplendidWebApi.Controllers
 							using ( IDbCommand cmd = con.CreateCommand() )
 							{
 								cmd.CommandText = sSQL;
-								Sql.AddParameter(cmd, "@USER_ID"  , input.USER_ID);
+								Sql.AddParameter(cmd, "@USER_ID"  , USER_ID);
 								Sql.AddParameter(cmd, "@USER_HASH", sUSER_HASH);
 								int nLastPassword = Sql.ToInteger(cmd.ExecuteScalar());
 								if ( nLastPassword == 0 )
 								{
-									SqlProcs.spUSERS_PasswordUpdate(input.USER_ID, sUSER_HASH);
+									SqlProcs.spUSERS_PasswordUpdate(USER_ID, sUSER_HASH);
 									// 02/23/2011 Paul.  Clear any existing failures so that the user can login. 
 									// This is how an administrator will reset the failure count. 
 									SplendidInit.LoginTracking(sUSER_NAME, true);
@@ -3907,23 +3936,21 @@ namespace SplendidWebApi.Controllers
 			catch(Exception ex)
 			{
 				// 01/10/2022 Paul.  Log all change password failures. 
-				SplendidError.SystemError(new StackTrace(true).GetFrame(0), "Change Password for " + input.USER_ID.ToString() + " failed.  " + ex.Message);
+				SplendidError.SystemError(new StackTrace(true).GetFrame(0), "Change Password for " + USER_ID.ToString() + " failed.  " + ex.Message);
 				throw;
 			}
 		}
 		#endregion
 
 		// 05/08/2019 Paul.  The React client will need to update the saved search of each module. 
+		[DotNetLegacyData]
 		[HttpPost("[action]")]
 		// 02/07/2022 Paul.  Must follow old convention of returning value under d.  { d: value }
-		public Dictionary<string, object> UpdateSavedSearch(Dictionary<string, object> dict)
+		public Guid UpdateSavedSearch([FromBody] Dictionary<string, object> dict)
 		{
 			Guid gID = Guid.Empty;
 			//try
 			{
-				if ( !Security.IsAuthenticated() )
-					throw(new Exception("Authentication required"));
-				
 				// 05/13/2019 Paul.  The React client will need to save the search view by ID. 
 				// 01/19/2020 Paul.  The ID may not be provided, so we need to pevent a missing exception. 
 				       gID                = (dict.ContainsKey("ID"               ) ? Sql.ToGuid  (dict["ID"               ]) : Guid.Empty  );
@@ -3944,9 +3971,7 @@ namespace SplendidWebApi.Controllers
 				// 02/04/2007 Paul.  Don't catch the exception.  
 				// It is a web service, so the exception will be handled properly by the AJAX framework. 
 			}
-			Dictionary<string, object> d = new Dictionary<string, object>();
-			d.Add("d", gID.ToString());
-			return d;
+			return gID;
 		}
 
 		public class DeleteSavedSearchParameters
@@ -4239,16 +4264,7 @@ namespace SplendidWebApi.Controllers
 					throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS")));
 				}
 			}
-			// 02/27/2021 Paul.  We need to correct for singulare table names, whereby the views and procedures are plural. 
-			if ( sTABLE_NAME == "PROJECT" )
-				sTABLE_NAME = "PROJECTS";
-			else if ( sTABLE_NAME == "PROJECT_TASK" )
-				sTABLE_NAME = "PROJECT_TASKS";
-			if ( sRELATED_TABLE == "PROJECT" )
-				sRELATED_TABLE = "PROJECTS";
-			else if ( sRELATED_TABLE == "PROJECT_TASK" )
-				sRELATED_TABLE = "PROJECT_TASKS";
-			
+		
 			string sRELATIONSHIP_TABLE = sTABLE_NAME + "_" + sRELATED_TABLE;
 			string sMODULE_FIELD_NAME  = SplendidCRM.Crm.Modules.SingularTableName(sTABLE_NAME   ) + "_ID";
 			string sRELATED_FIELD_NAME = SplendidCRM.Crm.Modules.SingularTableName(sRELATED_TABLE) + "_ID";

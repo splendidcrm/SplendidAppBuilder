@@ -16,14 +16,9 @@
  *********************************************************************************************************************/
 using System;
 using System.IO;
-using System.Web;
-//using System.Web.SessionState;
-//using System.Web.UI.WebControls;
-using System.Collections.Generic;
 using System.Text;
 using System.Security.Cryptography;
 using System.Data;
-using System.Data.Common;
 
 using Microsoft.AspNetCore.Http;
 
@@ -53,13 +48,13 @@ namespace SplendidCRM
 				// We will most likely see this in a SOAP call. 
 				// 01/13/2008 Paul.  Return an empty guid if the session does not exist. 
 				// This will allow us to reuse lots of SqlProcs code in the scheduler. 
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					return Guid.Empty;
 				return  Sql.ToGuid(Session["USER_ID"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["USER_ID"] = value;
 			}
@@ -70,7 +65,7 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					return String.Empty;
 				return Security.HashPassword(Sql.ToString(Session["USER_ID"]) + ";" + Session.Id);
 			}
@@ -81,13 +76,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					return Guid.Empty;
 				return  Sql.ToGuid(Session["USER_LOGIN_ID"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["USER_LOGIN_ID"] = value;
 			}
@@ -97,13 +92,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToString(Session["USER_NAME"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["USER_NAME"] = value;
 			}
@@ -113,13 +108,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToString(Session["FULL_NAME"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["FULL_NAME"] = value;
 			}
@@ -130,13 +125,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToString(Session["PICTURE"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["PICTURE"] = value;
 			}
@@ -146,13 +141,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return Sql.ToBoolean(Session["IS_ADMIN"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["IS_ADMIN"] = value;
 			}
@@ -162,13 +157,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return Sql.ToBoolean(Session["IS_ADMIN_DELEGATE"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["IS_ADMIN_DELEGATE"] = value;
 			}
@@ -178,13 +173,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return Sql.ToBoolean(Session["PORTAL_ONLY"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["PORTAL_ONLY"] = value;
 			}
@@ -195,13 +190,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToGuid(Session["TEAM_ID"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["TEAM_ID"] = value;
 			}
@@ -211,13 +206,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToString(Session["TEAM_NAME"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["TEAM_NAME"] = value;
 			}
@@ -228,13 +223,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToString(Session["EXCHANGE_ALIAS"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["EXCHANGE_ALIAS"] = value;
 			}
@@ -245,13 +240,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToString(Session["EXCHANGE_EMAIL"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["EXCHANGE_EMAIL"] = value;
 			}
@@ -262,13 +257,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToString(Session["MAIL_SMTPUSER"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["MAIL_SMTPUSER"] = value;
 			}
@@ -279,13 +274,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToString(Session["MAIL_SMTPPASS"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["MAIL_SMTPPASS"] = value;
 			}
@@ -297,13 +292,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToString(Session["EMAIL1"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["EMAIL1"] = value;
 			}
@@ -314,13 +309,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToGuid(Session["PRIMARY_ROLE_ID"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["PRIMARY_ROLE_ID"] = value;
 			}
@@ -330,13 +325,13 @@ namespace SplendidCRM
 		{
 			get
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				return  Sql.ToString(Session["PRIMARY_ROLE_NAME"]);
 			}
 			set
 			{
-				if ( Session == null )
+				if ( Context == null || Session == null )
 					throw(new Exception("Context.Session is null"));
 				Session["PRIMARY_ROLE_NAME"] = value;
 			}
@@ -354,7 +349,6 @@ namespace SplendidCRM
 				return false;
 			// 11/19/2005 Paul.  AUTH_USER is the clear indication that NTLM is enabled. 
 			string sAUTH_USER = String.Empty;  //Sql.ToString(Context.Request.ServerVariables["AUTH_USER"]);
-			// 12/16/2021 TODO.  Confirm windows authentication. 
 			if ( Context.User != null && Context.User.Identity != null )
 			{
 				sAUTH_USER = Context.User.Identity.Name;
@@ -491,7 +485,7 @@ namespace SplendidCRM
 
 		public void SetUserAccess(string sMODULE_NAME, string sACCESS_TYPE, int nACLACCESS)
 		{
-			if ( Session == null )
+			if ( Context == null || Session == null )
 				throw(new Exception("Context.Session is null"));
 			// 06/04/2006 Paul.  Verify that sMODULE_NAME is not empty.  
 			if ( Sql.IsEmptyString(sMODULE_NAME) )
@@ -501,7 +495,7 @@ namespace SplendidCRM
 
 		public int GetUserAccess(string sMODULE_NAME, string sACCESS_TYPE)
 		{
-			if ( Session == null )
+			if ( Context == null || Session == null )
 				throw(new Exception("Context.Session is null"));
 			// 06/04/2006 Paul.  Verify that sMODULE_NAME is not empty.  
 			if ( Sql.IsEmptyString(sMODULE_NAME) )
@@ -768,7 +762,7 @@ namespace SplendidCRM
 		// 01/17/2010 Paul.  Field Security values are stored in the Session cache. 
 		public void SetUserFieldSecurity(string sMODULE_NAME, string sFIELD_NAME, int nACLACCESS)
 		{
-			if ( Session == null )
+			if ( Context == null || Session == null )
 				throw(new Exception("Context.Session is null"));
 			// 06/04/2006 Paul.  Verify that sMODULE_NAME is not empty.  
 			if ( Sql.IsEmptyString(sMODULE_NAME) )
@@ -782,7 +776,7 @@ namespace SplendidCRM
 		
 		protected int GetUserFieldSecurity(string sMODULE_NAME, string sFIELD_NAME)
 		{
-			if ( Session == null )
+			if ( Context == null || Session == null )
 				throw(new Exception("Context.Session is null"));
 			if ( Sql.IsEmptyString(sMODULE_NAME) )
 				throw(new Exception("GetUserFieldSecurity: sMODULE_NAME should not be empty."));
@@ -808,7 +802,7 @@ namespace SplendidCRM
 		}
 
 // 12/19/2021 TODO.  Need to prevent circular references to SplendidCache, so remove TeamHierarhy feature. 
-#if !SplendidApp
+#if false
 		// 01/05/2020 Paul.  Provide central location for constant. 
 		public const string TeamHierarchyModule = "TeamHierarchy";
 
@@ -951,7 +945,7 @@ namespace SplendidCRM
 					}
 					Sql.AddParameter(cmd, "@" + sFieldPlaceholder, this.USER_ID);
 // 12/19/2021 TODO.  Need to prevent circular references to SplendidCache, so remove TeamHierarhy feature. 
-#if !SplendidApp
+#if false
 					// 02/23/2017 Paul.  Add support for Team Hierarchy. 
 					// 06/05/2017 Paul.  The SavedSearch does not apply to the Dashboard. 
 					// 04/24/2018 Paul.  Provide a way to exclude the SavedSearch for areas that are global in nature. 
@@ -1160,7 +1154,7 @@ namespace SplendidCRM
 					}
 					Sql.AddParameter(cmd, "@" + sFieldPlaceholder, this.USER_ID);
 // 12/19/2021 TODO.  Need to prevent circular references to SplendidCache, so remove TeamHierarhy feature. 
-#if !SplendidApp
+#if false
 					// 02/23/2017 Paul.  Add support for Team Hierarchy. 
 					if ( bEnableTeamHierarchy )
 					{
@@ -1381,6 +1375,5 @@ namespace SplendidCRM
 		}
 	}
 }
-
 
 

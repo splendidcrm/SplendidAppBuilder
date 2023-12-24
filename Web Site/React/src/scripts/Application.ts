@@ -20,6 +20,7 @@ import { AdminRequestAll, SystemCacheRequestAll }   from '../scripts/SystemCache
 import { UpdateApplicationTheme, StartsWith }       from '../scripts/utility'           ;
 import { GetUserSession }                           from '../scripts/Login'             ;
 import SignalRStore                                 from '../SignalR/SignalRStore'      ;
+import SignalRCoreStore                             from '../SignalR/SignalRCoreStore'  ;
 
 // 07/11/2019 Paul.  Keep original React State object for debugging. 
 let jsonReactState: any = null;
@@ -88,9 +89,16 @@ export function Application_ResetReactState()
 export async function Application_GetReactLoginState(): Promise<any>
 {
 	//let ar dtStart = new Date();
-	//console.log((new Date()).toISOString() + ' ' + 'Application_GetReactLoginState', Credentials.RemoteServer);
 	let res = await SystemCacheRequestAll('GetReactLoginState');
 	let json = await GetSplendidResult(res);
+	//console.log((new Date()).toISOString() + ' ' + 'Application_GetReactLoginState', json);
+	// 06/03/2023 Paul.  A Docker app can initialize the database, so watch for it when attempting to login. 
+	if ( typeof(json) === 'string' && json.indexOf('The SplendidCRM database is being built.') > 0 )
+	{
+		console.log((new Date()).toISOString() + ' ' + 'Application_GetReactLoginState', 'The SplendidCRM database is being built.');
+		window.location.href = Credentials.RemoteServer;
+		return {};
+	}
 	//let dtEnd = new Date();
 	//let nSeconds = Math.round((dtEnd.getTime() - dtStart.getTime()) / 1000);
 	//console.log((new Date()).toISOString() + ' ' + 'Application_GetReactLoginState', json.d);
@@ -102,6 +110,10 @@ export async function Application_GetReactLoginState(): Promise<any>
 		SplendidCache.SetCONFIG(json.d.CONFIG);
 		Credentials.sUSER_LANG = json.d.CONFIG['default_language'];
 		SplendidCache.SetTERMINOLOGY(json.d.TERMINOLOGY);
+		// 12/10/2022 Paul.  Allow Login Terminology Lists to be customized. 
+		SplendidCache.SetTERMINOLOGY_LISTS        (json.d.TERMINOLOGY_LISTS        );
+		// 12/07/2022 Paul.  Allow the LoginView to be customized. 
+		SplendidCache.SetREACT_CUSTOM_VIEWS(json.d.REACT_CUSTOM_VIEWS);
 		UpdateApplicationTheme();
 	}
 	if ( Sql.IsEmptyString(Credentials.sUSER_LANG) )
@@ -347,7 +359,13 @@ export async function Application_GetReactState(source): Promise<any>
 	// 09/19/2020 Paul.  Provide events to start/stop SignalR. 
 	// 06/15/2021 Paul.  Allow SignalR to be disabled.
 	if ( !Sql.ToBoolean(SplendidCache.Config('SignalR.Disabled')) )
-		SignalRStore.Startup();
+	{
+		// 06/19/2023 Paul.  Separate implementation for SignalR on ASP.NET Core. 
+		if ( Sql.ToBoolean(SplendidCache.Config('SignalR.Core')) )
+			SignalRCoreStore.Startup();
+		else
+			SignalRStore.Startup();
+	}
 
 	// 05/28/2019 Paul.  We are getting an empty modules list, not sure why.  Use that to determine success. 
 	// 05/28/2019 Paul.  The Modules list being empty seems to be a missing Application.Lock() in SplendidInit.InitApp(). 
@@ -597,7 +615,13 @@ export async function Admin_GetReactState(sCaller?: string): Promise<any>
 	// 09/19/2020 Paul.  Provide events to start/stop SignalR. 
 	// 06/15/2021 Paul.  Allow SignalR to be disabled.
 	if ( !Sql.ToBoolean(SplendidCache.Config('SignalR.Disabled')) )
-		SignalRStore.Startup();
+	{
+		// 06/19/2023 Paul.  Separate implementation for SignalR on ASP.NET Core. 
+		if ( Sql.ToBoolean(SplendidCache.Config('SignalR.Core')) )
+			SignalRCoreStore.Startup();
+		else
+			SignalRStore.Startup();
+	}
 	
 	// 05/28/2019 Paul.  We are getting an empty modules list, not sure why.  Use that to determine success. 
 	// 05/28/2019 Paul.  The Modules list being empty seems to be a missing Application.Lock() in SplendidInit.InitApp(). 

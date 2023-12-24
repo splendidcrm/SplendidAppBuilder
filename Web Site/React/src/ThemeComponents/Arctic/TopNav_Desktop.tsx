@@ -541,6 +541,15 @@ class ArcticTopNav_Desktop extends React.Component<ITopNavProps, ITopNavState>
 		});
 	}
 
+	private _onSystemLog = () =>
+	{
+		// 08/21/2020 Paul.  Change to cause pop-down menu to hide. 
+		this.setState({ menuChangeKey: this.state.menuChangeKey+1 }, () =>
+		{
+			this.props.history.push('/Reset/Administration/SystemLog');
+		});
+	}
+
 	private _onAbout = () =>
 	{
 		// 08/21/2020 Paul.  Change to cause pop-down menu to hide. 
@@ -617,9 +626,10 @@ class ArcticTopNav_Desktop extends React.Component<ITopNavProps, ITopNavState>
 	private TabTitle = (activeModule, tabMenu) =>
 	{
 		// 06/30/2021 Paul.  Provide the URL to the module so that right-click-new-tab would navigate to the correct location. 
+		// 07/08/2023 Paul.  ASP.NET Core will not have /React in the base. 
 		return <a
 			className={ (tabMenu.MODULE_NAME == activeModule ? 'current' : 'other') + 'TabLink' }
-			href={ Credentials.RemoteServer + 'React/' + tabMenu.MODULE_NAME }
+			href={ Credentials.RemoteServer + Credentials.ReactBase + tabMenu.MODULE_NAME }
 			style={ { textDecoration: 'none'} }
 			onClick={ (e) => { e.preventDefault(); this._onTabTitleClick(tabMenu); } }>
 			{ L10n.Term(tabMenu.DISPLAY_NAME) }
@@ -883,7 +893,7 @@ class ArcticTopNav_Desktop extends React.Component<ITopNavProps, ITopNavState>
 			));
 			// 06/30/2021 Paul.  Provide the URL to the module so that right-click-new-tab would navigate to the correct location. 
 			moreItems = tabsSecondary.map((tabMenu) => (
-				<a className="otherTabMoreLink" href={ Credentials.RemoteServer + 'React/' + tabMenu.MODULE_NAME } style={ {minWidth: '10rem'} } onClick={ (e) => { e.preventDefault(); this._onModuleClick(tabMenu.MODULE_NAME); } }>{ L10n.Term(tabMenu.DISPLAY_NAME) }</a>
+				<a className="otherTabMoreLink" href={ Credentials.RemoteServer + Credentials.ReactBase + tabMenu.MODULE_NAME } style={ {minWidth: '10rem'} } onClick={ (e) => { e.preventDefault(); this._onModuleClick(tabMenu.MODULE_NAME); } }>{ L10n.Term(tabMenu.DISPLAY_NAME) }</a>
 			));
 			// 07/15/2021 Paul.  Now that we are caching the ReactState, we need an end-user way to clear the cache even when using Windows authentication.  So alway show logout. 
 			userContextMenu = (
@@ -891,6 +901,7 @@ class ArcticTopNav_Desktop extends React.Component<ITopNavProps, ITopNavState>
 					<NavItem title={ userName } id="usercontextmenu" key="usercontextmenu" style={ {paddingLeft: '0px', paddingRight: '0px', paddingBottom: '15px'} }>
 						{ bIsAuthenticated                                                            ? <NavDropdown.Item key="usercontext-myprofile"    className="ModuleActionsMenuItems" onClick={() => this._onUserProfile()      }>{ L10n.Term('.LBL_MY_ACCOUNT'   ) }</NavDropdown.Item> : null }
 						{ bIsAuthenticated && (Security.IS_ADMIN() || Security.IS_ADMIN_DELEGATE())   ? <NavDropdown.Item key="usercontext-admin"        className="ModuleActionsMenuItems" onClick={() => this._onAdminPage()        }>{ L10n.Term('.LBL_ADMIN'        ) }</NavDropdown.Item> : null }
+						{ bIsAuthenticated && Security.IS_ADMIN() && false                            ? <NavDropdown.Item key="usercontext-systemlog"    className="ModuleActionsMenuItems" onClick={() => this._onSystemLog()        }>{ L10n.Term('.LBL_SYSTEM_LOG'   ) }</NavDropdown.Item> : null }
 						                                                                                <NavDropdown.Item key="usercontext-about"        className="ModuleActionsMenuItems" onClick={() => this._onAbout()            }>{ L10n.Term('.LNK_ABOUT'        ) }</NavDropdown.Item>
 						{ bIsAuthenticated                                                            ? <NavDropdown.Item key="usercontext-logout"       className="ModuleActionsMenuItems" onClick={() => this._onLogout()           }>{ L10n.Term('.LBL_LOGOUT'       ) }</NavDropdown.Item> : null }
 					</NavItem>
@@ -1064,5 +1075,4 @@ class ArcticTopNav_Desktop extends React.Component<ITopNavProps, ITopNavState>
 }
 
 export default withRouter(ArcticTopNav_Desktop);
-
 

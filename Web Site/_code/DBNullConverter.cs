@@ -17,7 +17,7 @@
 using System;
 using System.Text.Json;
 
-namespace SplendidApp
+namespace SplendidCRM
 {
 	// https://github.com/dotnet/runtime/issues/418
 	public class DBNullConverter : System.Text.Json.Serialization.JsonConverter<DBNull>
@@ -41,4 +41,3 @@ namespace SplendidApp
 		}
 	}
 }
-

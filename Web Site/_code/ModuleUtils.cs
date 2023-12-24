@@ -20,33 +20,46 @@ using System.Web;
 using System.Data;
 using System.Data.Common;
 using System.Text;
-using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Net.Mail;
+using System.Collections.Specialized;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Diagnostics;
+
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Caching.Memory;
+
+using Spring.Social.Office365;
 
 namespace SplendidCRM
 {
 	public class ModuleUtils
 	{
-// 12/21/2021 TODO.  Login.SendForgotPasswordNotice
-#if false
 		// 10/30/2021 Paul.  Moved from LoginView. 
 		public class Login
 		{
+			private IMemoryCache                     memoryCache         ;
 			private SplendidCRM.DbProviderFactories  DbProviderFactories = new SplendidCRM.DbProviderFactories();
-			private HttpApplicationState Application        = new HttpApplicationState();
-			private Security             Security           ;
-			private SqlProcs             SqlProcs           ;
-			private SplendidCRM.Crm.Config           Config             = new SplendidCRM.Crm.Config();
+			private HttpApplicationState             Application         = new HttpApplicationState();
+			private Security                         Security            ;
+			private SqlProcs                         SqlProcs            ;
+			private SplendidError                    SplendidError       ;
+			private Crm.Config                       Config              = new SplendidCRM.Crm.Config();
+			private GoogleApps                       GoogleApps          ;
+			private Office365Sync                    Office365Sync       ;
 
-			public Login(Security Security, SqlProcs SqlProcs)
+			public Login(IMemoryCache memoryCache, Security Security, SplendidError SplendidError, SqlProcs SqlProcs, GoogleApps GoogleApps, Office365Sync Office365Sync)
 			{
-				this.Security = Security;
-				this.SqlProcs = SqlProcs;
+				this.memoryCache         = memoryCache        ;
+				this.Security            = Security           ;
+				this.SqlProcs            = SqlProcs           ;
+				this.SplendidError       = SplendidError      ;
+				this.GoogleApps          = GoogleApps         ;
+				this.Office365Sync       = Office365Sync      ;
 			}
 
-			public string SendForgotPasswordNotice(HttpApplicationState Application, string sUSER_NAME, string sEMAIL)
+			public string SendForgotPasswordNotice(string sUSER_NAME, string sEMAIL)
 			{
 				string sStatus = String.Empty;
 				L10N L10n = new L10N("en-US");
@@ -96,7 +109,7 @@ namespace SplendidCRM
 									Guid gPASSWORD_ID = Guid.Empty;
 									SqlProcs.spUSERS_PASSWORD_LINK_InsertOnly(ref gPASSWORD_ID, sUSER_NAME);
 									
-									string sSiteURL   = Config.SiteURL(Application);
+									string sSiteURL   = Config.SiteURL();
 									string sResetURL  = sSiteURL + "Users/ChangePassword.aspx?ID=" + gPASSWORD_ID.ToString();
 									string sSubject   = L10n.Term("Users.LBL_RESET_PASSWORD_SUBJECT");
 									if ( Sql.IsEmptyString(sSubject) )
@@ -117,9 +130,9 @@ namespace SplendidCRM
 									mail.Body         = sBodyHtml;
 									mail.IsBodyHtml   = true;
 									mail.BodyEncoding = System.Text.Encoding.UTF8;
-											
+									
 									// 01/17/2017 Paul.  New SplendidMailClient object to encapsulate SMTP, Exchange and Google mail. 
-									SplendidMailClient client = SplendidMailClient.CreateMailClient(Application);
+									SplendidMailClient client = SplendidMailClient.CreateMailClient(Application, memoryCache, Security, SplendidError, GoogleApps, Office365Sync);
 									client.Send(mail);
 									sStatus = L10n.Term("Users.LBL_RESET_PASSWORD_STATUS");
 								}
@@ -134,7 +147,7 @@ namespace SplendidCRM
 				return sStatus;
 			}
 		}
-#endif
+
 
 		// 03/11/2016 Paul.  We are getting timeouts on Azure, so recompile in the background with a status update. 
 		// 10/31/2021 Paul.  Moved from EditCustomFields/NewRecord. 
@@ -143,14 +156,24 @@ namespace SplendidCRM
 			private SplendidCRM.DbProviderFactories  DbProviderFactories = new SplendidCRM.DbProviderFactories();
 			private HttpApplicationState Application        = new HttpApplicationState();
 			private SplendidError        SplendidError      ;
+			private readonly ILogger<EditCustomFields> _logger;
 
-			public EditCustomFields(SplendidError SplendidError)
+			public EditCustomFields(SplendidError SplendidError, ILogger<EditCustomFields> logger)
 			{
 				this.SplendidError = SplendidError;
+				this._logger       = logger;
 			}
 
-			public void RecompileViews(object o)
+#pragma warning disable CS1998
+			public async ValueTask RecompileViews(CancellationToken token)
 			{
+				RecompileViews();
+			}
+#pragma warning restore CS1998
+
+			private void RecompileViews()
+			{
+				_logger.LogInformation("EditCustomFields.RecompileViews Begin");
 				try
 				{
 					Application["System.Recompile.StartDate"      ] = DateTime.Now;
@@ -257,15 +280,16 @@ namespace SplendidCRM
 					Application.Remove("System.Recompile.TotalViews"     );
 					Application.Remove("System.Recompile.CurrentViewName");
 				}
+				_logger.LogInformation("EditCustomFields.RecompileViews End");
 			}
 		}
+
 
 		// 10/31/2021 Paul.  Moved GetAuditData to ModuleUtils from Audit/PopupView. 
 		public class Audit
 		{
 			private SplendidCRM.DbProviderFactories  DbProviderFactories = new SplendidCRM.DbProviderFactories();
 			private HttpApplicationState Application        = new HttpApplicationState();
-			private HttpSessionState     Session            ;
 			private Security             Security           ;
 			private L10N                 L10n               ;
 			private SplendidCRM.TimeZone T10n               = new SplendidCRM.TimeZone();
@@ -275,9 +299,8 @@ namespace SplendidCRM
 			
 			public Audit(HttpSessionState Session, Security Security, SplendidError SplendidError, SplendidCache SplendidCache, Crm.Modules Modules)
 			{
-				this.Session             = Session            ;
 				this.Security            = Security           ;
-				this.L10n                = new L10N(Sql.ToString(Session["USER_LANG"]));
+				this.L10n                = new L10N(Sql.ToString(Session["USER_SETTINGS/CULTURE"]));
 				this.SplendidError       = SplendidError      ;
 				this.SplendidCache       = SplendidCache      ;
 				this.Modules             = Modules            ;
@@ -671,20 +694,13 @@ namespace SplendidCRM
 		{
 			private SplendidCRM.DbProviderFactories  DbProviderFactories = new SplendidCRM.DbProviderFactories();
 			private HttpApplicationState Application        = new HttpApplicationState();
-			private HttpSessionState     Session            ;
 			private Security             Security           ;
 			private L10N                 L10n               ;
-			private SplendidCRM.TimeZone T10n               = new SplendidCRM.TimeZone();
-			private SplendidCache        SplendidCache      ;
-			private Crm.Modules          Modules            ;
 			
-			public AuditPersonalInfo(HttpSessionState Session, Security Security, SplendidCache SplendidCache, Crm.Modules Modules)
+			public AuditPersonalInfo(HttpSessionState Session, Security Security)
 			{
-				this.Session             = Session            ;
 				this.Security            = Security           ;
-				this.L10n                = new L10N(Sql.ToString(Session["USER_LANG"]));
-				this.SplendidCache       = SplendidCache      ;
-				this.Modules             = Modules            ;
+				this.L10n                = new L10N(Sql.ToString(Session["USER_SETTINGS/CULTURE"]));
 			}
 
 			// 02/05/2018 Paul.  Provide a way to convert ID to NAME for custom fields. 
@@ -822,5 +838,4 @@ namespace SplendidCRM
 	}
 
 }
-
 

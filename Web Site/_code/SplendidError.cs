@@ -39,13 +39,13 @@ namespace SplendidCRM
 		private SqlProcs             SqlProcs           ;
 		private Sql                  Sql                ;
 
-		public SplendidError(IWebHostEnvironment hostingEnvironment, IHttpContextAccessor httpContextAccessor, Security Security, Sql Sql)
+		public SplendidError(IWebHostEnvironment hostingEnvironment, IHttpContextAccessor httpContextAccessor, Security Security, Sql Sql, SqlProcs SqlProcs)
 		{
 			this.hostingEnvironment  = hostingEnvironment  ;
 			this.Context             = httpContextAccessor.HttpContext;
 			this.Security            = Security           ;
-			this.SqlProcs            = new SqlProcs(Security, Sql);
 			this.Sql                 = Sql                ;
+			this.SqlProcs            = SqlProcs           ;
 		}
 
 		public void SystemWarning(StackFrame stack, string sMESSAGE)
@@ -262,5 +262,4 @@ namespace SplendidCRM
 		}
 	}
 }
-
 

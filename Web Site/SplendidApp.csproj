@@ -15,15 +15,15 @@
     <SpaRoot>React\</SpaRoot>
     <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**;$(SpaRoot)platforms\**;$(SpaRoot)plugins\**</DefaultItemExcludes>
     <Company>SplendidCRM Software, Inc.</Company>
-    <Copyright>Copyright (C) 2005-2022 SplendidCRM, Inc.  All rights reserved.</Copyright>
+    <Copyright>Copyright (C) 2005-2023 SplendidCRM, Inc.  All rights reserved.</Copyright>
     <Authors>SplendidCRM Software, Inc.</Authors>
     <VersionSuffix>1.0.$([System.DateTime]::Now.ToString(yy))$([System.DateTime]::Now.DayOfYear.ToString(000)).$([System.DateTime]::Now.ToString(HHmm))</VersionSuffix>
     <AssemblyVersion Condition=" '$(VersionSuffix)' == '' ">0.0.0.1</AssemblyVersion>
     <AssemblyVersion Condition=" '$(VersionSuffix)' != '' ">$(VersionSuffix)</AssemblyVersion>
     <Version Condition=" '$(VersionSuffix)' == '' ">0.0.1.0</Version>
     <Version Condition=" '$(VersionSuffix)' != '' ">$(VersionSuffix)</Version>
-    <AssemblyVersion>1.2.22132.0346</AssemblyVersion>
-    <Version>1.2.22132.0347</Version>
+    <Version>1.1.23358.0132</Version>
+    <AssemblyVersion>1.1.23358.0132</AssemblyVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -38,7 +38,11 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="5.0.13" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="5.0.13" />
     <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="5.0.12" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="3.8.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="3.8.0" />
     <PackageReference Include="Microsoft.Identity.Web" Version="1.22.1" />
+    <PackageReference Include="Microsoft.IdentityModel.Protocols.WsFederation" Version="6.31.0" />
+    <PackageReference Include="Mnt.Microsoft.Exchange.WebServices.Data" Version="2.2.1.1" />
     <PackageReference Include="System.Data.SqlClient" Version="4.8.3" />
   </ItemGroup>
 

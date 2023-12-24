@@ -565,6 +565,9 @@ export class SplendidCacheStore
 			return null;
 		}
 		let arrLHS = this.RELATIONSHIPS[sLHS_MODULE];
+		// 09/15/2022 Paul.  Separate relationship lookup into two passes.  
+		// The goal here is to allow meetings_contacts to be found before contact_meetings is found. 
+		// RHS == RHS && LHS == LHS should have a higher prioirty than RHS == LHS && LHS == RHS. 
 		for ( let i = 0; i < arrLHS.length; i++ )
 		{
 			let relationship = arrLHS[i];
@@ -572,7 +575,11 @@ export class SplendidCacheStore
 			{
 				return relationship;
 			}
-			else if ( relationship.RHS_MODULE == sLHS_MODULE && relationship.LHS_MODULE == sRHS_MODULE )
+		}
+		for ( let i = 0; i < arrLHS.length; i++ )
+		{
+			let relationship = arrLHS[i];
+			if ( relationship.RHS_MODULE == sLHS_MODULE && relationship.LHS_MODULE == sRHS_MODULE )
 			{
 				return relationship;
 			}
@@ -1262,7 +1269,8 @@ export class SplendidCacheStore
 
 	SetTERMINOLOGY_LISTS(obj)
 	{
-		this.TERMINOLOGY_LISTS = obj;
+		// 12/10/2022 Paul.  Allow Login Terminology Lists to be customized. 
+		this.TERMINOLOGY_LISTS = obj ? obj : {};
 	}
 
 	SetTERMINOLOGY(obj)
@@ -1331,10 +1339,11 @@ export class SplendidCacheStore
 	// 02/25/2019 Paul.  New method to fetch the React Custom Views. 
 	SetREACT_CUSTOM_VIEWS(obj)
 	{
-		this.REACT_CUSTOM_VIEWS = obj;
+		// 12/07/2022 Paul.  Allow the LoginView to be customized. 
+		this.REACT_CUSTOM_VIEWS = obj ? obj : {};
 		// 03/01/2019 Paul.  Clear compiled views. 
 		this.COMPILED_CUSTOM_VIEWS = new Object();
-		this.REACT_DASHLETS = obj['Dashlets'];
+		this.REACT_DASHLETS = obj ? obj['Dashlets'] : {};
 		this.COMPILED_DASHLETS = new Object();
 	}
 
@@ -1970,4 +1979,3 @@ export class SplendidCacheStore
 
 const splendidCache = new SplendidCacheStore();
 export default splendidCache;
-

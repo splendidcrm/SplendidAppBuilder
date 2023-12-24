@@ -33,7 +33,6 @@ import { UpdateModule }                          from '../../scripts/ModuleUpdat
 import ErrorComponent                            from '../../components/ErrorComponent'    ;
 import DynamicButtons                            from '../../components/DynamicButtons'    ;
 import DynamicEditView                           from '../../views/DynamicEditView'        ;
-import { start } from '@popperjs/core';
 
 interface ITopNavProps extends RouteComponentProps<any>
 {
@@ -629,6 +628,15 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 		});
 	}
 
+	private _onSystemLog = () =>
+	{
+		// 08/21/2020 Paul.  Change to cause pop-down menu to hide. 
+		this.setState({ actionsModule: null, menuChangeKey: this.state.menuChangeKey+1 }, () =>
+		{
+			this.props.history.push('/Reset/Administration/SystemLog');
+		});
+	}
+
 	private _onAbout = () =>
 	{
 		// 08/21/2020 Paul.  Change to cause pop-down menu to hide. 
@@ -705,9 +713,10 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 	private TabTitle = (activeModule, tabMenu) =>
 	{
 		// 06/30/2021 Paul.  Provide the URL to the module so that right-click-new-tab would navigate to the correct location. 
+		// 07/08/2023 Paul.  ASP.NET Core will not have /React in the base. 
 		return <a
 			className={ (tabMenu.MODULE_NAME == activeModule ? 'current' : 'other') + 'TabLink' }
-			href={ Credentials.RemoteServer + 'React/' + tabMenu.MODULE_NAME }
+			href={ Credentials.RemoteServer + Credentials.ReactBase + tabMenu.MODULE_NAME }
 			style={ { textDecoration: 'none'} }
 			onClick={ (e) => { e.preventDefault(); this._onTabTitleClick(tabMenu); } }>
 			{ L10n.Term(tabMenu.DISPLAY_NAME) }
@@ -892,7 +901,8 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 	private moduleUrl = (MODULE_NAME: string, ID?: string) =>
 	{
 		let module: MODULE = SplendidCache.Module(MODULE_NAME, this.constructor.name + '.moduleUrl');
-		let url: string = Credentials.RemoteServer + 'React/';
+		// 07/08/2023 Paul.  ASP.NET Core will not have /React in the base. 
+		let url: string = Credentials.RemoteServer + Credentials.ReactBase;
 		if ( module != null && module.IS_ADMIN )
 			url += 'Administration/';
 		url += MODULE_NAME;
@@ -936,13 +946,15 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 			else if ( MODULE_NAME == 'userContextMenu' )
 			{
 				// 07/15/2021 Paul.  Now that we are caching the ReactState, we need an end-user way to clear the cache even when using Windows authentication.  So alway show logout. 
+				// 07/08/2023 Paul.  ASP.NET Core will not have /React in the base. 
 				return (<div id='ctlSixToolbar_pnlToolbarUserHover' key='ctlSixToolbar_pnlToolbarUserHover' style={ {position: 'absolute', left, top, zIndex: 1000} } onMouseOut={ (e) => this.moduleTabMouseOut(e, MODULE_NAME) } ref={ this.pnlTabHover }>
 					<table cellPadding={ 0 } cellSpacing={ 0 } className='MoreActionsInnerTable'>
 						<tr>
 							<td className='MoreActionsInnerCell'>
-							{ bIsAuthenticated                                                            ? <a href={ Credentials.RemoteServer + 'React/' + 'Users/MyAccount'          } id='usercontext-myprofile'    key='usercontext-myprofile'     className='ModuleActionsMenuItems' onClick={ (e) => { e.preventDefault(); this._onUserProfile()     ; } }>{ L10n.Term('.LBL_MY_ACCOUNT'   ) }</a> : null }
-							{ bIsAuthenticated && (Security.IS_ADMIN() || Security.IS_ADMIN_DELEGATE())   ? <a href={ Credentials.RemoteServer + 'React/' + 'Administration'           } id='usercontext-admin'        key='usercontext-admin'         className='ModuleActionsMenuItems' onClick={ (e) => { e.preventDefault(); this._onAdminPage()       ; } }>{ L10n.Term('.LBL_ADMIN'        ) }</a> : null }
-							                                                                                <a href={ Credentials.RemoteServer + 'React/' + 'Home/About'               } id='usercontext-about'        key='usercontext-about'         className='ModuleActionsMenuItems' onClick={ (e) => { e.preventDefault(); this._onAbout()           ; } }>{ L10n.Term('.LNK_ABOUT'        ) }</a>
+							{ bIsAuthenticated                                                            ? <a href={ Credentials.RemoteServer + Credentials.ReactBase + 'Users/MyAccount'          } id='usercontext-myprofile'    key='usercontext-myprofile'     className='ModuleActionsMenuItems' onClick={ (e) => { e.preventDefault(); this._onUserProfile()     ; } }>{ L10n.Term('.LBL_MY_ACCOUNT'   ) }</a> : null }
+							{ bIsAuthenticated && (Security.IS_ADMIN() || Security.IS_ADMIN_DELEGATE())   ? <a href={ Credentials.RemoteServer + Credentials.ReactBase + 'Administration'           } id='usercontext-admin'        key='usercontext-admin'         className='ModuleActionsMenuItems' onClick={ (e) => { e.preventDefault(); this._onAdminPage()       ; } }>{ L10n.Term('.LBL_ADMIN'        ) }</a> : null }
+							{ bIsAuthenticated && Security.IS_ADMIN() && false                            ? <a href={ Credentials.RemoteServer + Credentials.ReactBase + 'Administration/SystemLog' } id='usercontext-systemlog'    key='usercontext-systemlog'     className='ModuleActionsMenuItems' onClick={ (e) => { e.preventDefault(); this._onSystemLog()       ; } }>{ L10n.Term('.LBL_SYSTEM_LOG'   ) }</a> : null }
+							                                                                                <a href={ Credentials.RemoteServer + Credentials.ReactBase + 'Home/About'               } id='usercontext-about'        key='usercontext-about'         className='ModuleActionsMenuItems' onClick={ (e) => { e.preventDefault(); this._onAbout()           ; } }>{ L10n.Term('.LNK_ABOUT'        ) }</a>
 							{ bIsAuthenticated                                                            ? <a href='#' id='usercontext-logout'       key='usercontext-logout'        className='ModuleActionsMenuItems' onClick={ (e) => { e.preventDefault(); this._onLogout()          ; } }>{ L10n.Term('.LBL_LOGOUT'       ) }</a> : null }
 							</td>
 						</tr>
@@ -984,7 +996,7 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 								{
 									this.Actions(MODULE_NAME).map((item) => 
 									(
-										<a href={ Credentials.RemoteServer + 'React/' + item.key } key={ 'action_' + item.key } className='ModuleActionsMenuItems' onClick={ (e) => { e.preventDefault(); this._onAction(item.MODULE_NAME, item); } }>{ item.label }</a>
+										<a href={ Credentials.RemoteServer + Credentials.ReactBase + item.key } key={ 'action_' + item.key } className='ModuleActionsMenuItems' onClick={ (e) => { e.preventDefault(); this._onAction(item.MODULE_NAME, item); } }>{ item.label }</a>
 									))
 								}
 							</td>
@@ -1018,7 +1030,7 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 
 	public render()
 	{
-		const { bIsAuthenticated, txtQuickSearch, nMaxTabs, showInlineEdit, item, error, QUICK_CREATE_MODULE, activeModule, actionsModule, showUnifiedSearch, unifiedSearchItems, showQuickCreate, menuChangeKey } = this.state;
+		const { bIsAuthenticated, txtQuickSearch, nMaxTabs, showInlineEdit, item, error, QUICK_CREATE_MODULE, activeModule, actionsModule, showUnifiedSearch, showQuickCreate, menuChangeKey, unifiedSearchItems } = this.state;
 	
 		//03/06/2019. Chase. Referencing ADMIN_MODE triggers re-renders when it's updated;
 		Credentials.ADMIN_MODE;
@@ -1096,13 +1108,9 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 							EDIT_ACLACCESS: SplendidCache.GetUserAccess(module.MODULE_NAME, 'edit'),
 							EDIT_LABEL    : null,
 						};
-						// 02/08/2022 Paul.  We only need to overflow if showing max tabs. 
-						if ( this.tabsPrimary.length >= nMaxTabs )
+						if ( this.tabsPrimary.length > 0 )
 						{
-							if ( this.tabsPrimary.length > 0 )
-							{
-								this.tabsSecondary.unshift(this.tabsPrimary.pop());
-							}
+							this.tabsSecondary.unshift(this.tabsPrimary.pop());
 						}
 						this.tabsPrimary.push(activeMenu);
 					}
@@ -1111,11 +1119,6 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 		}
 		if ( SplendidCache.IsInitialized )
 		{
-			//console.log((new Date()).toISOString() + ' ' + this.constructor.name + '.render tabMenus'     , SplendidCache.TAB_MENU);
-			//console.log((new Date()).toISOString() + ' ' + this.constructor.name + '.render tabsPrimary'  , this.tabsPrimary);
-			//console.log((new Date()).toISOString() + ' ' + this.constructor.name + '.render tabsSecondary', this.tabsSecondary);
-			//console.log((new Date()).toISOString() + ' ' + this.constructor.name + '.render activeModule' , activeModule);
-
 			// 04/16/2020 Paul.  Use logo from config. 
 			let sCompanyHomeImage: string = Crm_Config.ToString('header_home_image');
 			// 10/28/2021 Paul.  Allow logo to be stored in config table as base64. 
@@ -1148,7 +1151,7 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 									onMouseOver={ (e) => this.moduleTabMouseOver(e, 'Home') }
 									onMouseOut={ (e) => this.moduleTabMouseOut(e, 'Home') }
 								>
-									<a href={ Credentials.RemoteServer + 'React/' + 'Home' } title={ L10n.Term('.moduleList.Home') } onClick={ (e) => { e.preventDefault(); this._onModuleClick('Home'); } }><img src={ Credentials.RemoteServer + 'Include/images/blank.gif' } style={ {borderWidth: '0px', height: '42px', width: '42px'} } /></a>
+									<a href={ Credentials.RemoteServer + Credentials.ReactBase + 'Home' } title={ L10n.Term('.moduleList.Home') } onClick={ (e) => { e.preventDefault(); this._onModuleClick('Home'); } }><img src={ Credentials.RemoteServer + 'Include/images/blank.gif' } style={ {borderWidth: '0px', height: '42px', width: '42px'} } /></a>
 								</td>
 							{
 								this.tabsPrimary.map((tabMenu, index) => 
@@ -1163,7 +1166,7 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 									>
 										<tr>
 											<td className={ (tabMenu.MODULE_NAME == activeModule ? 'current' : 'other') + 'Tab' } style={ {whiteSpace: 'nowrap'} }>
-												<a href={ Credentials.RemoteServer + 'React/' + tabMenu.MODULE_NAME } onClick={ (e) => { e.preventDefault(); this._onModuleClick(tabMenu.MODULE_NAME); } } className={ (tabMenu.MODULE_NAME == activeModule ? 'current' : 'other') + 'TabLink' }>{ L10n.Term(tabMenu.DISPLAY_NAME) }</a><br />
+												<a href={ Credentials.RemoteServer + Credentials.ReactBase + tabMenu.MODULE_NAME } onClick={ (e) => { e.preventDefault(); this._onModuleClick(tabMenu.MODULE_NAME); } } className={ (tabMenu.MODULE_NAME == activeModule ? 'current' : 'other') + 'TabLink' }>{ L10n.Term(tabMenu.DISPLAY_NAME) }</a><br />
 												<a href='#' onClick={ (e) => { e.preventDefault(); this.moduleTabClick(tabMenu.MODULE_NAME); } } style={ cssTouchTab }><img src={ Credentials.RemoteServer + 'Include/images/blank.gif' } style={ cssTouchImage } /></a>
 											</td>
 										</tr>
@@ -1181,7 +1184,7 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 								>
 									<tr>
 										<td className='otherTab' style={ {whiteSpace: 'nowrap'} }>
-											<span id='ctlSixToolbar_ctlTabMenu_labTabMenuMore' className='otherTabMoreArrow' style={ {paddingRight: '6px'} }>More</span><img id='ctlSixToolbar_ctlTabMenu_imgTabMenuMore' src={ this.themeURL + 'images/more.gif' } style={ {borderWidth: '0px', height: '20px', width: '16px'} } /><br />
+											<span id='ctlSixToolbar_ctlTabMenu_labTabMenuMore' className='otherTabMoreArrow' style={ {paddingRight: '6px'} }>{ L10n.Term('.LBL_MORE') }</span><img id='ctlSixToolbar_ctlTabMenu_imgTabMenuMore' src={ this.themeURL + 'images/more.gif' } style={ {borderWidth: '0px', height: '20px', width: '16px'} } /><br />
 											<a href='#' onClick={ (e) => { e.preventDefault(); this.moduleTabClick('more'); } } style={ cssTouchTab }><img src={ Credentials.RemoteServer + 'Include/images/blank.gif' } style={ cssTouchImage } /></a>
 										</td>
 									</tr>
@@ -1325,7 +1328,7 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 		else
 		{
 			let logoTitle : string = Sql.IsEmptyString(Crm_Config.ToString('company_name'      )) ? 'SplendidCRM Software, Inc.' : Crm_Config.ToString('company_name'      );
-			let logoUrl   : string = Sql.IsEmptyString(Crm_Config.ToString('header_logo_image' )) ? 'SplendidCRM_Logo.gif'       : Crm_Config.ToString('header_logo_image' );
+			let logoUrl   : string = Sql.IsEmptyString(Crm_Config.ToString('header_logo_image' )) ? '~/App_Themes/Arctic/images/SplendidCRM_Logo.png' : Crm_Config.ToString('header_logo_image' );
 			let logoWidth : string = Sql.IsEmptyString(Crm_Config.ToString('header_logo_width' )) ? '207px'                      : Crm_Config.ToString('header_logo_width' );
 			let logoHeight: string = Sql.IsEmptyString(Crm_Config.ToString('header_logo_height')) ? '60px'                       : Crm_Config.ToString('header_logo_height');
 			// 02/17/2020 Paul.  We do not want to parse the style at this time, so just ignore the value. 
@@ -1368,5 +1371,4 @@ class ArcticTopNav extends React.Component<ITopNavProps, ITopNavState>
 }
 
 export default withRouter(ArcticTopNav);
-
 

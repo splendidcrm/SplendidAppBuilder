@@ -2789,8 +2789,8 @@ namespace SplendidWebApi.Controllers
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
-				SplendidCache.GetAllReactCustomViews(objs, lstMODULES, "~/React/src/CustomViewsJS"     , false);
-				SplendidCache.GetAllReactCustomViews(objs, lstMODULES, "~/React/src/AdminCustomViewsJS", true );
+				SplendidCache.GetAllReactCustomViews(objs, lstMODULES, "~/React/src/CustomViewsJS"     , false, false);
+				SplendidCache.GetAllReactCustomViews(objs, lstMODULES, "~/React/src/AdminCustomViewsJS", true , false);
 				// 05/23/2019 Paul.  Include Dashlet views, but we do not yet have a way to separate by module. 
 				SplendidCache.GetAllReactDashletViews(objs, lstMODULES, "~/React/src/DashletsJS");
 				memoryCache.Set("ReactCustomViews.Admin." + sModuleList, objs, SplendidCache.DefaultCacheExpiration());
@@ -2883,7 +2883,7 @@ namespace SplendidWebApi.Controllers
 								string sLANG         = Sql.ToString(rdr["LANG"        ]);
 								string sNAME         = Sql.ToString(rdr["NAME"        ]);
 								string sDISPLAY_NAME = Sql.ToString(rdr["DISPLAY_NAME"]);
-								L10n.SetTerm(sLANG, sMODULE_NAME, sNAME, sDISPLAY_NAME);
+								L10N.SetTerm(Application, sLANG, sMODULE_NAME, sNAME, sDISPLAY_NAME);
 							}
 						}
 					}

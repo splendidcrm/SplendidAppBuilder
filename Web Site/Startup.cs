@@ -130,20 +130,30 @@ namespace SplendidApp
 				options.Cookie.IsEssential = true;
 			});
 			services.AddScoped<HttpSessionState>();
-			services.AddScoped<Sql>();
-			services.AddScoped<SplendidError>();
 			services.AddScoped<Security>();
+			services.AddScoped<Sql>();
 			services.AddScoped<SqlProcs>();
+			services.AddScoped<SplendidError>();
+			services.AddScoped<XmlUtil>();
 			services.AddScoped<Utils>();
+			services.AddScoped<CurrencyUtils>();
 			services.AddScoped<SplendidInit>();
 			services.AddScoped<SplendidCache>();
 			services.AddScoped<RestUtil>();
+			services.AddScoped<SplendidControl>();
 			services.AddScoped<SplendidDynamic>();
 			services.AddScoped<ModuleUtils.Audit>();
 			services.AddScoped<ModuleUtils.AuditPersonalInfo>();
+			services.AddScoped<ModuleUtils.EditCustomFields>();
+			services.AddScoped<SplendidCRM.Crm.Users>();
 			services.AddScoped<SplendidCRM.Crm.Modules>();
 			services.AddScoped<SplendidCRM.Crm.Images>();
 			services.AddScoped<ActiveDirectory>();
+			services.AddScoped<ExchangeSync>();
+			services.AddScoped<GoogleApps>();
+			services.AddScoped<Spring.Social.Office365.Office365Sync>();
+			services.AddScoped<ModuleUtils.Login>();
+			services.AddScoped<ArchiveUtils>();
 
 			services.AddControllersWithViews();
 			// http://www.binaryintellect.net/articles/a1e0e49e-d4d0-4b7c-b758-84234f14047b.aspx
@@ -165,12 +175,16 @@ namespace SplendidApp
 				configuration.RootPath = "React/dist"; // "ClientApp/build";
 			});
 			services.AddRazorPages();
+			
+			services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
+			services.AddHostedService<QueuedBackgroundService>();
 		}
 
 		// This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
 		public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
 		{
-			//Console.WriteLine("Startup.Configure");
+			Console.WriteLine("Startup.Configure");
+			Debug.WriteLine("Startup.Configure");
 			app.UseExceptionHandler(appError =>
 			{
 				appError.Run(async context =>
@@ -202,7 +216,7 @@ namespace SplendidApp
 				}
 			});
 			// 12/30/2021 Paul.  We must rewrite the URL very early, otherwise it is ignored. 
-			app.Use((context, next) =>
+			app.Use(async (context, next) =>
 			{
 				string sRequestPath = context.Request.Path.Value;
 				Console.WriteLine("Request: " + sRequestPath);
@@ -217,12 +231,14 @@ namespace SplendidApp
 					{
 						context.Request.Path = "/Angular";
 					}
-					else
+					// 06/20/2023 Paul.  Must not chagne SignalR requests. 
+					else if ( !sRequestPath.StartsWith("/signalr_") )
 					{
 						context.Request.Path = "/";
 					}
 				}
-				return next();
+				await next.Invoke();
+				//return next();
 			});
 			//app.UseHttpsRedirection();
 			// https://docs.microsoft.com/en-us/aspnet/core/fundamentals/static-files?view=aspnetcore-5.0
@@ -237,11 +253,14 @@ namespace SplendidApp
 				FileProvider = new PhysicalFileProvider(Path.Combine(env.ContentRootPath, "App_Themes")),
 				RequestPath  = "/App_Themes"
 			});  // App_Themes
+			// 06/10/2023 Paul.  Not working on Angular at this time. 
+			/*
 			app.UseStaticFiles(new StaticFileOptions
 			{
 				FileProvider = new PhysicalFileProvider(Path.Combine(env.ContentRootPath, "Angular/dist")),
 				RequestPath  = "/Angular/dist"
-			});  // App_Themes
+			});
+			*/
 			/*
 			app.UseStaticFiles(new StaticFileOptions
 			{
@@ -271,19 +290,15 @@ namespace SplendidApp
 				if ( sRequestPath.Contains(".svc") )
 				{
 					HttpApplicationState Application = new HttpApplicationState();
-					if ( !Sql.ToBoolean(Application["SplendidInit.InitApp"]) )
+					if ( !Sql.ToBoolean(Application["SplendidInit.InitApp"]) && !MaintenanceMiddleware.MaintenanceMode )
 					{
 						// https://www.thecodebuzz.com/cannot-resolve-scoped-service-from-root-provider-asp-net-core/
 						IServiceScope scope = app.ApplicationServices.CreateScope();
 						SplendidInit SplendidInit = scope.ServiceProvider.GetService<SplendidInit>();
-						lock ( SplendidInit )
-						{
-							SplendidInit.InitApp();
-							Application["SplendidInit.InitApp"] = true;
-						}
+						await SplendidInit.InitDatabase();
 					}
 					ISession Session = context.Session;
-					if ( Session != null )
+					if ( Session != null && !MaintenanceMiddleware.MaintenanceMode )
 					{
 						//Console.WriteLine("Session: " + Session.Id);
 						//Debug.WriteLine("Session: " + Session.Id);
@@ -299,6 +314,7 @@ namespace SplendidApp
 				}
 				await next.Invoke();
 			});
+			app.UseMiddleware<MaintenanceMiddleware>();
 
 			app.UseEndpoints(endpoints =>
 			{

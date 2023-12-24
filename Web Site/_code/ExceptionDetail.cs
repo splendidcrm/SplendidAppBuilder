@@ -15,11 +15,6 @@
  * IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *********************************************************************************************************************/
 using System;
-using System.IO;
-using System.Data;
-using System.Data.Common;
-using System.Web;
-using System.Diagnostics;
 
 namespace SplendidCRM
 {
@@ -43,5 +38,4 @@ namespace SplendidCRM
 		}
 	}
 }
-
 

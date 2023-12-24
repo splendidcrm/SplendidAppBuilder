@@ -110,8 +110,6 @@ namespace SplendidCRM
 #pragma warning restore CA1416
 							break;
 					}
-// 12/16/2021 TODO.  HostingDatabase
-#if false
 					case "HostingDatabase":
 					{
 						// 09/27/2006 Paul.  Allow a Hosting Database to contain connection strings. 
@@ -179,7 +177,6 @@ namespace SplendidCRM
 						}
 						break;
 					}
-#endif
 				}
 				Application["SplendidProvider"] = sSplendidProvider;
 				Application["ConnectionString"] = sConnectionString;
@@ -195,41 +192,9 @@ namespace SplendidCRM
 				{
 					return new SqlClientFactory(sConnectionString);
 				}
-// 12/16/2021 TODO.  System.Data.OracleClient, MySql.Data, etc. 
-#if false
-				case "System.Data.OracleClient":
-				{
-					return new OracleSystemDataFactory(sConnectionString);
-				}
-				case "Oracle.DataAccess.Client":
-				{
-					return new OracleClientFactory(sConnectionString);
-				}
-				case "MySql.Data":
-				{
-					return new MySQLClientFactory(sConnectionString);
-				}
-				case "IBM.Data.DB2":
-				{
-					return new DB2ClientFactory(sConnectionString);
-				}
-				case "Sybase.Data.AseClient":
-				{
-					return new SybaseClientFactory(sConnectionString);
-				}
-				case "iAnywhere.Data.AsaClient":
-				{
-					return new SQLAnywhereClientFactory(sConnectionString);
-				}
-				case "Npgsql":
-				{
-					return new NpgsqlClientFactory(sConnectionString);
-				}
-#endif
 				default:
 					throw(new Exception("Unsupported factory " + sSplendidProvider));
 			}
 		}
 	}
 }
-

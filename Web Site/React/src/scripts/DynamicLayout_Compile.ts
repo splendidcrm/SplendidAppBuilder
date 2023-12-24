@@ -27,6 +27,7 @@ const BootstrapTable                         = require('react-bootstrap-table-ne
 const { FontAwesomeIcon }                    = require('@fortawesome/react-fontawesome'       );
 const moment                                 = require('moment'                               );
 const { Appear }                             = require('react-lifecycle-appear'               );
+const { RouterStore }                        = require('mobx-react-router'                    );
 // 2. Types
 const ACL_ACCESS                             = require('../types/ACL_ACCESS'                  ).default;
 const ACL_FIELD_ACCESS                       = require('../types/ACL_FIELD_ACCESS'            ).default;
@@ -64,8 +65,12 @@ const { UpdateModule, DeleteModuleItem, DeleteModuleRecurrences, MassDeleteModul
 const { CreateSplendidRequest, GetSplendidResult                                              } = require('../scripts/SplendidRequest');
 const { DetailView_LoadItem, DetailView_LoadLayout, DetailView_LoadPersonalInfo, DetailView_RemoveField, DetailView_HideField, DetailView_FindField} = require('../scripts/DetailView'     );
 // 11/25/2020 Paul.  EditView_UpdateREPEAT_TYPE is used in Calls/Meetings EditView. 
-const { EditView_LoadItem, EditView_LoadLayout, EditView_ConvertItem, EditView_RemoveField, EditView_InitItem, EditView_FindField, EditView_HideField, EditView_UpdateREPEAT_TYPE } = require('../scripts/EditView'       );
-const { AuthenticatedMethod, IsAuthenticated, LoginRedirect, GetUserProfile, GetMyUserProfile, GetUserID } = require('../scripts/Login'          );
+const { EditView_LoadItem, EditView_LoadLayout, EditView_ConvertItem, EditView_RemoveField, EditView_InitItem, EditView_FindField, EditView_HideField, EditView_UpdateREPEAT_TYPE, EditView_GetTabList, EditView_ActivateTab } = require('../scripts/EditView'       );
+// 12/07/2022 Paul.  Allow the LoginView to be customized. 
+const AuthenticationContext                  = require('../scripts/adal'                      ).default;
+const { Application_GetReactLoginState }     = require('../scripts/Application'               );
+const { AppName, AppVersion }                = require('../AppVersion'                        );
+const { AuthenticatedMethod, IsAuthenticated, LoginRedirect, GetUserProfile, GetMyUserProfile, GetUserID, Login, ForgotPassword } = require('../scripts/Login'          );
 const { Right, Left, StartsWith, EndsWith, Trim, uuidFast, isEmptyObject, isTouchDevice, base64ArrayBuffer, isMobile, screenWidth, screenHeight } = require('../scripts/utility'        );
 const { NormalizeDescription, XssFilter                                                       } = require('../scripts/EmailUtils'     );
 const { ListView_LoadTable, ListView_LoadModule, ListView_LoadLayout, ListView_LoadModulePaginated, ListView_LoadTablePaginated, ListView_LoadTableWithAggregate } = require('../scripts/ListView');
@@ -99,6 +104,10 @@ const ExportHeader                           = require('../components/ExportHead
 const PreviewDashboard                       = require('../views/PreviewDashboard'                ).default;
 const MassUpdate                             = require('../views/MassUpdate'                      ).default;
 const DynamicMassUpdate                      = require('../views/DynamicMassUpdate'               ).default;
+// 08/30/2022 Paul.  A customer needs to have DynamicDetailView for a custom DetailView. 
+const DynamicDetailView                      = require('../views/DynamicDetailView'               ).default;
+const DynamicEditView                        = require('../views/DynamicEditView'                 ).default;
+const DynamicListView                        = require('../views/DynamicListView'                 ).default;
 const ModuleViewFactory                      = require('../ModuleViews'                           ).default;
 const AuditView                              = require('../views/AuditView'                       ).default;
 const HeaderButtonsFactory                   = require('../ThemeComponents/HeaderButtonsFactory'  ).default;
@@ -136,5 +145,4 @@ export async function DynamicLayout_Compile(responseText: string)
 	})();
 	return view;
 }
-
 

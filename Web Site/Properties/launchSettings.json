@@ -2,10 +2,10 @@
   "iisSettings": {
     "windowsAuthentication": true,
     "anonymousAuthentication": false,
-    "iis": {
-      "applicationUrl": "http://localhost/SplendidAngle",
-      "sslPort": 0
-    },
+	"iis": {
+	  "applicationUrl": "http://localhost/SplendidApp",
+	  "sslPort": 0
+	},
     "iisExpress": {
       "applicationUrl": "http://localhost:29857",
       "sslPort": 0
@@ -27,13 +27,13 @@
       },
       "applicationUrl": "https://localhost:5000"
     },
-    "IIS": {
-      "commandName": "IIS",
-      "launchBrowser": true,
-      "launchUrl": "http://localhost/SplendidAngle",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    }
+	"IIS": {
+	  "commandName": "IIS",
+	  "launchBrowser": true,
+	  "launchUrl": "http://localhost/SplendidApp",
+	  "environmentVariables": {
+		"ASPNETCORE_ENVIRONMENT": "Development"
+	  }
+	}
   }
 }

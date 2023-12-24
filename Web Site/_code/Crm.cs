@@ -18,7 +18,6 @@ using System;
 using System.IO;
 using System.Data;
 using System.Data.Common;
-using System.Web;
 using System.Diagnostics;
 
 namespace SplendidCRM.Crm
@@ -564,81 +563,7 @@ namespace SplendidCRM.Crm
 			return gRECIPIENT_ID;
 		}
 	}
-/*
-	public class EmailImages
-	{
-		private HttpApplicationState Application = new HttpApplicationState();
-		private SqlProcs             SqlProcs   ;
 
-		public EmailImages(SqlProcs SqlProcs)
-		{
-			this.SqlProcs    = SqlProcs;
-		}
-
-		// 10/18/2009 Paul.  Move blob logic to LoadFile. 
-		public void LoadFile(Guid gID, Stream stm, IDbTransaction trn)
-		{
-			if ( Sql.StreamBlobs(trn.Connection) )
-			{
-				const int BUFFER_LENGTH = 4*1024;
-				byte[] binFILE_POINTER = new byte[16];
-				// 01/20/2006 Paul.  Must include in transaction
-				SqlProcs.spEMAIL_IMAGE_InitPointer(gID, ref binFILE_POINTER, trn);
-				using ( BinaryReader reader = new BinaryReader(stm) )
-				{
-					int nFILE_OFFSET = 0 ;
-					byte[] binBYTES = reader.ReadBytes(BUFFER_LENGTH);
-					while ( binBYTES.Length > 0 )
-					{
-						// 08/14/2005 Paul.  gID is used by Oracle, binFILE_POINTER is used by SQL Server. 
-						// 01/20/2006 Paul.  Must include in transaction
-						SqlProcs.spEMAIL_IMAGE_WriteOffset(gID, binFILE_POINTER, nFILE_OFFSET, binBYTES, trn);
-						nFILE_OFFSET += binBYTES.Length;
-						binBYTES = reader.ReadBytes(BUFFER_LENGTH);
-					}
-				}
-			}
-			else
-			{
-				using ( BinaryReader reader = new BinaryReader(stm) )
-				{
-					byte[] binBYTES = reader.ReadBytes((int) stm.Length);
-					SqlProcs.spEMAIL_IMAGES_CONTENT_Update(gID, binBYTES, trn);
-				}
-			}
-		}
-
-		// 11/06/2010 Paul.  We need a version that accepts a byte array. 
-		public void LoadFile(Guid gID, byte[] binDATA, IDbTransaction trn)
-		{
-			if ( Sql.StreamBlobs(trn.Connection) )
-			{
-				const int BUFFER_LENGTH = 4*1024;
-				byte[] binFILE_POINTER = new byte[16];
-				SqlProcs.spEMAIL_IMAGE_InitPointer(gID, ref binFILE_POINTER, trn);
-				using ( MemoryStream stm = new MemoryStream(binDATA) )
-				{
-					using ( BinaryReader reader = new BinaryReader(stm) )
-					{
-						int nFILE_OFFSET = 0 ;
-						byte[] binBYTES = reader.ReadBytes(BUFFER_LENGTH);
-						while ( binBYTES.Length > 0 )
-						{
-							SqlProcs.spEMAIL_IMAGE_WriteOffset(gID, binFILE_POINTER, nFILE_OFFSET, binBYTES, trn);
-							nFILE_OFFSET += binBYTES.Length;
-							binBYTES = reader.ReadBytes(BUFFER_LENGTH);
-						}
-					}
-				}
-			}
-			else
-			{
-				SqlProcs.spEMAIL_IMAGES_CONTENT_Update(gID, binDATA, trn);
-			}
-		}
-
-	}
-*/
 	// 05/27/2016 Paul.  Move LoadFile to Crm.Images class. 
 	public class Images
 	{
@@ -741,20 +666,10 @@ namespace SplendidCRM.Crm
 		{
 			return Sql.ToBoolean(Application["CONFIG.enable_multi_tenant_teams"]);
 		}
-		public bool enable_team_management(HttpApplicationState Application)
-		{
-			// 09/16/2018 Paul.  Create a multi-tenant system. 
-			return Sql.ToBoolean(Application["CONFIG.enable_team_management"]) || Sql.ToBoolean(Application["CONFIG.enable_multi_tenant_teams"]);
-		}
 		public bool enable_team_management()
 		{
 			// 09/16/2018 Paul.  Create a multi-tenant system. 
 			return Sql.ToBoolean(Application["CONFIG.enable_team_management"]) || Sql.ToBoolean(Application["CONFIG.enable_multi_tenant_teams"]);
-		}
-		public bool require_team_management(HttpApplicationState Application)
-		{
-			// 09/16/2018 Paul.  Create a multi-tenant system. 
-			return Sql.ToBoolean(Application["CONFIG.require_team_management"]) || Sql.ToBoolean(Application["CONFIG.enable_multi_tenant_teams"]);
 		}
 		public bool require_team_management()
 		{
@@ -762,10 +677,6 @@ namespace SplendidCRM.Crm
 			return Sql.ToBoolean(Application["CONFIG.require_team_management"]) || Sql.ToBoolean(Application["CONFIG.enable_multi_tenant_teams"]);
 		}
 		// 08/28/2009 Paul.  Allow dynamic teams to be turned off. 
-		public bool enable_dynamic_teams(HttpApplicationState Application)
-		{
-			return Sql.ToBoolean(Application["CONFIG.enable_dynamic_teams"]);
-		}
 		public bool enable_dynamic_teams()
 		{
 			return Sql.ToBoolean(Application["CONFIG.enable_dynamic_teams"]);
@@ -781,19 +692,11 @@ namespace SplendidCRM.Crm
 			return Sql.ToBoolean(Application["CONFIG.enable_dynamic_mass_update"]);
 		}
 		// 04/28/2016 Paul.  Allow team hierarchy. 
-		public bool enable_team_hierarchy(HttpApplicationState Application)
-		{
-			return Sql.ToBoolean(Application["CONFIG.enable_team_hierarchy"]);
-		}
 		public bool enable_team_hierarchy()
 		{
 			return Sql.ToBoolean(Application["CONFIG.enable_team_hierarchy"]);
 		}
 		// 01/01/2008 Paul.  We need a quick way to require user assignments across the system. 
-		public bool require_user_assignment(HttpApplicationState Application)
-		{
-			return Sql.ToBoolean(Application["CONFIG.require_user_assignment"]);
-		}
 		public bool require_user_assignment()
 		{
 			return Sql.ToBoolean(Application["CONFIG.require_user_assignment"]);
@@ -804,12 +707,6 @@ namespace SplendidCRM.Crm
 			return Sql.ToBoolean(Application["Modules.DataPrivacy.Valid"]);
 		}
 		// 01/27/2011 Paul.  Need to be able to call show_unassigned from the ExchangeSync service. 
-		public bool show_unassigned(HttpApplicationState Application)
-		{
-			// 01/22/2007 Paul.  If ASSIGNED_USER_ID is null, then let everybody see it. 
-			// This was added to work around a bug whereby the ASSIGNED_USER_ID was not automatically assigned to the creating user. 
-			return Sql.ToBoolean(Application["CONFIG.show_unassigned"]);
-		}
 		public bool show_unassigned()
 		{
 			// 01/22/2007 Paul.  If ASSIGNED_USER_ID is null, then let everybody see it. 
@@ -872,7 +769,7 @@ namespace SplendidCRM.Crm
 			return sOptions;
 		}
 
-		public string SiteURL(HttpApplicationState Application)
+		public string SiteURL()
 		{
 			string sSiteURL = Sql.ToString(Application["CONFIG.site_url"]);
 			if ( Sql.IsEmptyString(sSiteURL) )
@@ -926,7 +823,7 @@ namespace SplendidCRM.Crm
 		}
 
 		// 03/24/2020 Paul.  Reports require an additional scheduler join. 
-		public Boolean WorkflowExists(HttpApplicationState Application)
+		public Boolean WorkflowExists()
 		{
 			bool bWorkflowExists = Sql.ToBoolean(Application["Exists.WORKFLOW"]);
 			if ( !bWorkflowExists && Application["Exists.WORKFLOW"] == null )
@@ -1095,5 +992,4 @@ namespace SplendidCRM.Crm
 		}
 	}
 }
-
 

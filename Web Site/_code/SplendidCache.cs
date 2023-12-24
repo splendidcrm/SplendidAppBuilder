@@ -17,15 +17,11 @@
 using System;
 using System.IO;
 using System.Xml;
-using System.Web;
-//using System.Web.SessionState;
 using System.Text;
 using System.Data;
 using System.Data.Common;
 using System.Collections;
 using System.Collections.Generic;
-using System.Security.Principal;
-//using System.Web.Caching;
 using System.Globalization;
 using System.Threading;
 using System.Diagnostics;
@@ -86,7 +82,8 @@ namespace SplendidCRM
 	public partial class SplendidCache
 	{
 		private IWebHostEnvironment  hostingEnvironment ;
-		private IMemoryCache         memoryCache        ;
+		private IHttpContextAccessor httpContextAccessor;
+		private IMemoryCache         Cache              ;
 		private DbProviderFactories  DbProviderFactories = new DbProviderFactories();
 		private HttpApplicationState Application = new HttpApplicationState();
 		private HttpSessionState     Session            ;
@@ -99,46 +96,171 @@ namespace SplendidCRM
 		private SplendidError        SplendidError      ;
 		private Crm.Modules          CrmModules         ;
 		private Crm.Config           Config             = new Crm.Config();
+		private XmlUtil              XmlUtil            ;
 
 		// 10/04/2015 Paul.  Changed custom caches to a dynamic list. 
 		public List<SplendidCacheReference> CustomCaches = new List<SplendidCacheReference>();
 
-		public SplendidCache(IWebHostEnvironment hostingEnvironment, IMemoryCache memoryCache, HttpSessionState Session, Security Security, SplendidError SplendidError, Crm.Modules Modules)
+		public SplendidCache(IWebHostEnvironment hostingEnvironment, IHttpContextAccessor httpContextAccessor, IMemoryCache memoryCache, HttpSessionState Session, Security Security, Sql Sql, SqlProcs SqlProcs, SplendidError SplendidError, Crm.Modules Modules, XmlUtil XmlUtil)
 		{
 			this.hostingEnvironment  = hostingEnvironment ;
-			this.memoryCache         = memoryCache        ;
+			this.httpContextAccessor = httpContextAccessor;
+			this.Cache               = memoryCache        ;
 			this.Session             = Session            ;
 			this.Security            = Security           ;
-			this.L10n                = new L10N(Sql.ToString(Session["USER_LANG"]));
-			this.Sql                 = new Sql(Session, Security);
-			this.SqlProcs            = new SqlProcs(Security, Sql);
+			this.L10n                = new L10N(Sql.ToString(Session["USER_SETTINGS/CULTURE"]));
+			this.Sql                 = Sql                ;
+			this.SqlProcs            = SqlProcs           ;
 			this.SplendidError       = SplendidError      ;
 			this.CrmModules          = Modules            ;
+			this.XmlUtil             = XmlUtil            ;
 
 			CustomCaches.Add(new SplendidCacheReference("AssignedUser"      , "ID"         , "USER_NAME"   , new SplendidCacheCallback(this.AssignedUser      )));
 			// 03/06/2012 Paul.  A report parameter can include an Assigned To list. 
 			CustomCaches.Add(new SplendidCacheReference("AssignedTo"        , "USER_NAME"  , "USER_NAME"   , new SplendidCacheCallback(this.AssignedUser      )));
 			CustomCaches.Add(new SplendidCacheReference("Currencies"        , "ID"         , "NAME_SYMBOL" , new SplendidCacheCallback(this.Currencies        )));
+			CustomCaches.Add(new SplendidCacheReference("Release"           , "ID"         , "NAME"        , new SplendidCacheCallback(this.Release           )));
+			CustomCaches.Add(new SplendidCacheReference("Manufacturers"     , "ID"         , "NAME"        , new SplendidCacheCallback(this.Manufacturers     )));
+			// 08/13/2010 Paul.  Add discounts to line items. 
+			CustomCaches.Add(new SplendidCacheReference("Discounts"         , "ID"         , "NAME"        , new SplendidCacheCallback(this.Discounts         )));
+			CustomCaches.Add(new SplendidCacheReference("Shippers"          , "ID"         , "NAME"        , new SplendidCacheCallback(this.Shippers          )));
+			// 02/15/2015 Paul.  Change from terminology payment_types_dom to PaymentTypes list for QuickBooks Online. 
+			CustomCaches.Add(new SplendidCacheReference("PaymentTypes"      , "ID"         , "NAME"        , new SplendidCacheCallback(this.PaymentTypes      )));
+			// 02/27/2015 Paul.  Change from terminology payment_terms_dom to PaymentTerms list for QuickBooks Online. 
+			CustomCaches.Add(new SplendidCacheReference("PaymentTerms"      , "ID"         , "NAME"        , new SplendidCacheCallback(this.PaymentTerms      )));
 			// 12/21/2010 Paul.  Allow regions to be used in a list. 
 			CustomCaches.Add(new SplendidCacheReference("Regions"           , "ID"         , "NAME"        , new SplendidCacheCallback(this.Regions           )));
+			CustomCaches.Add(new SplendidCacheReference("ProductTypes"      , "ID"         , "NAME"        , new SplendidCacheCallback(this.ProductTypes      )));
+			CustomCaches.Add(new SplendidCacheReference("ProductCategories" , "ID"         , "NAME"        , new SplendidCacheCallback(this.ProductCategories )));
+			CustomCaches.Add(new SplendidCacheReference("ContractTypes"     , "ID"         , "NAME"        , new SplendidCacheCallback(this.ContractTypes     )));
+			CustomCaches.Add(new SplendidCacheReference("ForumTopics"       , "NAME"       , "NAME"        , new SplendidCacheCallback(this.ForumTopics       )));  // 07/15/2007 Paul.  Add Forum Topics to the list of possible dropdowns. 
 			// 09/03/2008 Paul.  Not sure why the text was set to MODULE_NAME, but it should be DISPLAY_NAME. 
 			CustomCaches.Add(new SplendidCacheReference("Modules"           , "MODULE_NAME", "DISPLAY_NAME", new SplendidCacheCallback(this.Modules           )));  // 12/13/2007 Paul.  Managing shortcuts needs a dropdown of modules. 
 			// 10/18/2011 Paul.  The HTML5 Offline Client needs a list of module tables. 
 			CustomCaches.Add(new SplendidCacheReference("ModuleTables"      , "MODULE_NAME", "DISPLAY_NAME", new SplendidCacheCallback(this.Modules           )));  // 12/13/2007 Paul.  Managing shortcuts needs a dropdown of modules. 
+			// 11/10/2010 Paul.  Provide access to Rules Modules in SearchViews. 
+			CustomCaches.Add(new SplendidCacheReference("RulesModules"      , "MODULE_NAME", "DISPLAY_NAME", new SplendidCacheCallback(this.RulesModules      )));
+			CustomCaches.Add(new SplendidCacheReference("ReportingModules"  , "MODULE_NAME", "DISPLAY_NAME", new SplendidCacheCallback(this.ReportingModules  )));
+			CustomCaches.Add(new SplendidCacheReference("WorkflowModules"   , "MODULE_NAME", "DISPLAY_NAME", new SplendidCacheCallback(this.WorkflowModules   )));
+			CustomCaches.Add(new SplendidCacheReference("EmailGroups"       , "ID"         , "NAME"        , new SplendidCacheCallback(this.EmailGroups       )));
+			CustomCaches.Add(new SplendidCacheReference("InboundEmailBounce", "ID"         , "NAME"        , new SplendidCacheCallback(this.InboundEmailBounce)));
 			// 11/18/2008 Paul.  Teams can be used in the search panels. 
 			CustomCaches.Add(new SplendidCacheReference("Teams"             , "ID"         , "NAME"        , new SplendidCacheCallback(this.Teams             )));
+			// 01/24/2010 Paul.  Place the report list in the cache so that it would be available in SearchView. 
+			CustomCaches.Add(new SplendidCacheReference("Reports"           , "ID"         , "NAME"        , new SplendidCacheCallback(this.Reports           )));
+			// 09/10/2012 Paul.  Add User Signatures. 
+			CustomCaches.Add(new SplendidCacheReference("UserSignatures"    , "ID"         , "NAME"        , new SplendidCacheCallback(this.UserSignatures    )));
 			// 01/21/2013 Paul.  Allow Time Zones to be used in EditView. 
 			CustomCaches.Add(new SplendidCacheReference("TimeZones"         , "ID"         , "NAME"        , new SplendidCacheCallback(this.TimezonesListbox  )));
+			// 07/18/2013 Paul.  Add support for multiple outbound emails. 
+			// 09/23/2013 Paul.  OutboundMail should use the display name field. 
+			CustomCaches.Add(new SplendidCacheReference("OutboundMail"      , "ID"         , "DISPLAY_NAME", new SplendidCacheCallback(this.OutboundMail      )));
+			// 09/23/2013 Paul.  Add support for multiple outbound sms. 
+			CustomCaches.Add(new SplendidCacheReference("OutboundSms"       , "ID"         , "DISPLAY_NAME", new SplendidCacheCallback(this.OutboundSms       )));
+			// 12/13/2013 Paul.  Allow each product to have a default tax rate. 
+			// 09/23/2013 Paul.  Add support for multiple outbound sms. 
+			CustomCaches.Add(new SplendidCacheReference("TaxRates"          , "ID"         , "NAME"        , new SplendidCacheCallback(this.TaxRates          )));
+			// 12/12/2015 Paul.  /n Software and .netCharge use different lists. 
+			CustomCaches.Add(new SplendidCacheReference("LibraryPaymentGateways", "NAME"   , "DISPLAY_NAME", new SplendidCacheCallback(this.LibraryPaymentGateways)));
+			// 12/16/2015 Paul.  credit_card_year should be a custom list that adds 10 years to current year. 
+			CustomCaches.Add(new SplendidCacheReference("credit_card_year"      , "NAME"   , "DISPLAY_NAME", new SplendidCacheCallback(this.CreditCardYears       )));
+			// 05/12/2016 Paul.  Add Tags module. 
+			CustomCaches.Add(new SplendidCacheReference("Tags"              , "ID"         , "NAME"        , new SplendidCacheCallback(this.Tags              )));
 			// 02/21/2017 Paul.  Allow langauges to be used in a list. 
 			CustomCaches.Add(new SplendidCacheReference("Languages"         , "NAME"       , "DISPLAY_NAME", new SplendidCacheCallback(this.Languages         )));
+			// 06/27/2018 Paul.  Add ERASED_FIELDS when data privacy enabled. 
+			CustomCaches.Add(new SplendidCacheReference("DataPrivacyFields" , "NAME"       , "DISPLAY_NAME", new SplendidCacheCallback(this.DataPrivacyFields )));
+			// 03/26/2019 Paul.  Scheduler list so that it can be returned by REST API. 
+			CustomCaches.Add(new SplendidCacheReference("SchedulerJobs"       , "NAME"     , "DISPLAY_NAME", new SplendidCacheCallback(this.SchedulerJobs       )));
 			// 03/28/2019 Paul.  TerminologyPickLists so that it can be returned by REST API. 
 			CustomCaches.Add(new SplendidCacheReference("TerminologyPickLists", "LIST_NAME", "LIST_NAME"   , new SplendidCacheCallback(this.TerminologyPickLists)));
 			// 04/03/2019 Paul.  DynamicButtonViews so that it can be returned by REST API. 
 			CustomCaches.Add(new SplendidCacheReference("DynamicButtonViews"  , "VIEW_NAME", "VIEW_NAME"   , new SplendidCacheCallback(this.DynamicButtonViews  )));
+			// 05/01/2020 Paul.  Cache EmailTemplates for use in React Client. 
+			CustomCaches.Add(new SplendidCacheReference("EmailTemplates"      , "ID"       , "NAME"        , new SplendidCacheCallback(this.EmailTemplates      )));
+		}
+
+		// 06/02/2016 Paul.  Activities views will use new function that accepts an array of modules. 
+		public string[] arrActivityModules = new string[] {"Calls", "Meetings", "Tasks", "Emails", "Notes", "SmsMessages", "TwitterMessages", "ChatMessages"};
+
+		// 03/26/2019 Paul.  Scheduler list so that it can be returned by REST API. 
+		public DataTable SchedulerJobs()
+		{
+			// 05/14/2023 Paul.  L10n is not used.  Should use default or Session, not Application. 
+			//L10N L10n = new L10N(HttpContext.Current.Application["USER_SETTINGS/CULTURE"] as string);
+			DataTable dt = Cache.Get("SchedulerJobs") as DataTable;
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				dt.Columns.Add("NAME"        , Type.GetType("System.String"));
+				dt.Columns.Add("DISPLAY_NAME", Type.GetType("System.String"));
+				foreach ( string sJob in SchedulerUtils.Jobs )
+				{
+					DataRow row = dt.NewRow();
+					dt.Rows.Add(row);
+					row["NAME"        ] = "function::" + sJob;
+					row["DISPLAY_NAME"] = "function::" + sJob;
+				}
+				Cache.Set("SchedulerJobs", dt, DefaultCacheExpiration());
+			}
+			return dt;
+		}
+
+		// 04/03/2019 Paul.  DynamicButtonViews so that it can be returned by REST API. 
+		public DataTable DynamicButtonViews()
+		{
+			DataTable dt = Cache.Get("DynamicButtonViews") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select distinct VIEW_NAME" + ControlChars.CrLf
+						     + "  from vwDYNAMIC_BUTTONS " + ControlChars.CrLf
+						     + " order by VIEW_NAME      " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("DynamicButtonViews", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+		public void AddReportSource(string sName, string sDataValueField, string sDataTextField, DataTable dt)
+		{
+			SplendidCacheReference cacheReportList = new SplendidCacheReference(sName, sDataValueField, sDataTextField, delegate { return dt; });
+			Cache.Remove("Reports.Source." + sName);
+			// 02/17/2021 Paul.  We encountered an issue where a static/SpecificValues list was not populated.  if list is empty, the shorten the cache period to 2 minutes. 
+			DateTime dtExpiration = DateTime.Now.AddHours(1);
+			if ( dt == null || dt.Rows.Count == 0 )
+			{
+				dtExpiration = DateTime.Now.AddMinutes(2);
+				Debug.WriteLine("SplendidCache.AddReportSource " + sName + " is empty");
+			}
+			Cache.Set("Reports.Source." + sName, cacheReportList, dtExpiration);
 		}
 
 		// https://www.py4u.net/discuss/1941713
-		public static void ClearCache(IMemoryCache cache)
+		public void ClearCache(IMemoryCache cache)
 		{
 			if (cache == null)
 			{
@@ -178,42 +300,23 @@ namespace SplendidCRM
 			throw new InvalidOperationException("Unable to clear memory cache instance of type " + cache.GetType().FullName);
 		}
 
-		// 04/03/2019 Paul.  DynamicButtonViews so that it can be returned by REST API. 
-		public DataTable DynamicButtonViews()
+		// 04/30/2023 Paul.  Use reflection to get the keys from Cache. 
+		// https://stackoverflow.com/questions/45597057/how-to-retrieve-a-list-of-memory-cache-keys-in-asp-net-core
+		private List<string> GetCacheKeys()
 		{
-			DataTable dt = memoryCache.Get("DynamicButtonViews") as DataTable;
-			if ( dt == null )
+			var field = typeof(MemoryCache).GetProperty("EntriesCollection", BindingFlags.NonPublic | BindingFlags.Instance);
+			var collection = field.GetValue(Cache) as ICollection;
+			var items = new List<string>();
+			if (collection != null)
 			{
-				try
+				foreach (var item in collection)
 				{
-					DbProviderFactory dbf = DbProviderFactories.GetFactory();
-					using ( IDbConnection con = dbf.CreateConnection() )
-					{
-						con.Open();
-						string sSQL;
-						sSQL = "select distinct VIEW_NAME" + ControlChars.CrLf
-						     + "  from vwDYNAMIC_BUTTONS " + ControlChars.CrLf
-						     + " order by VIEW_NAME      " + ControlChars.CrLf;
-						using ( IDbCommand cmd = con.CreateCommand() )
-						{
-							cmd.CommandText = sSQL;
-							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
-							{
-								((IDbDataAdapter)da).SelectCommand = cmd;
-								dt = new DataTable();
-								da.Fill(dt);
-								memoryCache.Set("DynamicButtonViews", dt, DefaultCacheExpiration());
-							}
-						}
-					}
-				}
-				catch(Exception ex)
-				{
-					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
-					// 10/16/2005 Paul. Ignore list errors. 
+					var methodInfo = item.GetType().GetProperty("Key");
+					var val = methodInfo.GetValue(item);
+					items.Add(val.ToString());
 				}
 			}
-			return dt;
+			return items;
 		}
 
 		// 08/20/2008 Paul.  Provide a central location to clear cache values based on a table change. 
@@ -222,14 +325,24 @@ namespace SplendidCRM
 			switch ( sTABLE_NAME )
 			{
 				// Cached Data. 
-				case "CURRENCIES"               :  memoryCache.Remove("vwCURRENCIES_LISTBOX"                   );  break;
-				case "FORUM_TOPICS"             :  memoryCache.Remove("vwFORUM_TOPICS_LISTBOX"                 );  break;
+				case "CONTRACT_TYPES"           :  Cache.Remove("vwCONTRACT_TYPES_LISTBOX"               );  break;
+				case "CURRENCIES"               :  Cache.Remove("vwCURRENCIES_LISTBOX"                   );  break;
+				case "FORUM_TOPICS"             :  Cache.Remove("vwFORUM_TOPICS_LISTBOX"                 );  break;
 				case "FORUMS"                   :  break;
+				case "INBOUND_EMAILS"           :  this.ClearInboundEmails()                              ;  break;
+				case "MANUFACTURERS"            :  Cache.Remove("vwMANUFACTURERS_LISTBOX"                );  break;
+				case "PRODUCT_CATEGORIES"       :  Cache.Remove("vwPRODUCT_CATEGORIES_LISTBOX"           );  break;
+				case "PRODUCT_TYPES"            :  Cache.Remove("vwPRODUCT_TYPES_LISTBOX"                );  break;
+				case "RELEASES"                 :  Cache.Remove("vwRELEASES_LISTBOX"                     );  break;
+				// 08/13/2010 Paul.  Add discounts to line items. 
+				case "DISCOUNTS"                :  this.ClearDiscounts()                                  ;  break;
+				case "SHIPPERS"                 :  Cache.Remove("vwSHIPPERS_LISTBOX"                     );  break;
 				// 12/21/2010 Paul.  Allow regions to be used in a list. 
-				case "REGIONS"                  :  memoryCache.Remove("vwREGIONS"                              );  break;
+				case "REGIONS"                  :  Cache.Remove("vwREGIONS"                              );  break;
+				case "TAX_RATES"                :  this.ClearTaxRates()                                   ;  break;
 				// 11/18/2008 Paul.  Teams can be used in the search panels. 
-				case "TEAMS"                    :  this.ClearTeams()                             ;  break;
-				case "USERS"                    :  this.ClearUsers()                             ;  break;
+				case "TEAMS"                    :  this.ClearTeams()                                      ;  break;
+				case "USERS"                    :  this.ClearUsers()                                      ;  break;
 				// Cached System Tables. 
 				case "ACL_ACTIONS"              :  break;
 				case "ACL_ROLES"                :  break;
@@ -257,58 +370,49 @@ namespace SplendidCRM
 				case "LANGUAGES"                :  this.ClearLanguages()                         ;  break;
 				case "MODULES"                  :
 				{
-					memoryCache.Remove("vwMODULES");
-					memoryCache.Remove("vwCUSTOM_EDIT_MODULES");
-// 12/16/2021 TODO.  Clear memorycache of set of items. 
-#if !SplendidApp
-					foreach(DictionaryEntry oKey in Cache)
+					Cache.Remove("vwMODULES");
+					Cache.Remove("vwCUSTOM_EDIT_MODULES");
+					foreach(string sKey in GetCacheKeys())
 					{
-						string sKey = oKey.Key.ToString();
 						// 11/02/2009 Paul.  We will need a list of modules to manage offline clients. 
 						// 06/02/2016 Paul.  Stream security. 
 						// 06/02/2016 Paul.  Remove . in front of vwMODULES_Access_ByUser_.  It is not language dependent. 
 						// 05/26/2019 Paul.  Clear React client data.
 						if ( sKey.StartsWith("vwMODULES.") || sKey.Contains(".vwMODULES_Reporting_") || sKey.Contains(".vwMODULES_Import_") || sKey.EndsWith(".vwMODULES_Workflow") || sKey.Contains("vwMODULES_Access_ByUser_") || sKey.Contains("vwMODULES_Stream_ByUser_") )
-							memoryCache.Remove(sKey);
+							Cache.Remove(sKey);
 					}
-#endif
 					// 10/24/2009 Paul.  Clear the newly cached item module item. 
-					memoryCache.Remove("vwMODULES_Popup");
+					Cache.Remove("vwMODULES_Popup");
 					// 10/24/2009 Paul.  We still can't use the standard page caching otherwise we risk getting an unauthenticated page cached, which would prevent all popups. 
 					//HttpResponse.RemoveOutputCacheItem("~/Include/javascript/ModulePopupScripts.aspx");
 					break;
 				}
 				case "RELATIONSHIPS"            :
 				{
-// 12/16/2021 TODO.  Clear memorycache of set of items. 
-#if !SplendidApp
-					foreach(DictionaryEntry oKey in Cache)
+					Cache.Remove("vwRELATIONSHIPS_Reporting");
+					foreach(string sKey in GetCacheKeys())
 					{
-						string sKey = oKey.Key.ToString();
 						if ( sKey.EndsWith(".vwRELATIONSHIPS_Workflow") )
-							memoryCache.Remove(sKey);
+							Cache.Remove(sKey);
 					}
-#endif
 						break;
 				}
 				case "SHORTCUTS"                :  break;
 				case "TERMINOLOGY"              :  this.ClearTerminologyPickLists(); break;
 				case "TERMINOLOGY_ALIASES"      :  break;
-				case "TIMEZONES"                :  memoryCache.Remove("vwTIMEZONES");  memoryCache.Remove("vwTIMEZONES_LISTBOX");  break;
+				case "TIMEZONES"                :  Cache.Remove("vwTIMEZONES");  Cache.Remove("vwTIMEZONES_LISTBOX");  break;
+				// 05/01/2020 Paul.  Cache EmailTemplates for use in React Client. 
+				case "EMAIL_TEMPLATES"          :  this.ClearEmailTemplates();  break;
 			}
 		}
 
 		public void ClearSet(string sName)
 		{
-// 12/16/2021 TODO.  Clear memorycache of set of items. 
-#if !SplendidApp
-			foreach(DictionaryEntry oKey in Cache)
+			foreach(string sKey in GetCacheKeys())
 			{
-				string sKey = oKey.Key.ToString();
 				if ( sKey.StartsWith(sName) )
-					memoryCache.Remove(sKey);
+					Cache.Remove(sKey);
 			}
-#endif
 		}
 
 		public string CustomList(string sCacheName, string sValue, ref bool bCustomCache)
@@ -379,12 +483,12 @@ namespace SplendidCRM
 
 		public void ClearList(string sLanguage, string sListName)
 		{
-			memoryCache.Remove(sLanguage + "." + sListName);
+			Cache.Remove(sLanguage + "." + sListName);
 		}
 
 		public DataTable List(string sListName)
 		{
-			DataTable dt = memoryCache.Get(L10n.NAME + "." + sListName) as DataTable;
+			DataTable dt = Cache.Get(L10n.NAME + "." + sListName) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -418,7 +522,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set(L10n.NAME + "." + sListName, dt, DefaultCacheExpiration());
+								Cache.Set(L10n.NAME + "." + sListName, dt, DefaultCacheExpiration());
 							}
 						}
 						// 12/03/2005 Paul.  Most lists require data, so if the language-specific list does not exist, just use English. 
@@ -438,7 +542,7 @@ namespace SplendidCRM
 										((IDbDataAdapter)da).SelectCommand = cmd;
 										dt = new DataTable();
 										da.Fill(dt);
-										memoryCache.Set(L10n.NAME + "." + sListName, dt, DefaultCacheExpiration());
+										Cache.Set(L10n.NAME + "." + sListName, dt, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -460,18 +564,18 @@ namespace SplendidCRM
 
 		public void ClearUsers()
 		{
-			memoryCache.Remove("vwUSERS_ASSIGNED_TO");
-			memoryCache.Remove("vwUSERS_List");
-			memoryCache.Remove("vwUSERS_Groups");
+			Cache.Remove("vwUSERS_ASSIGNED_TO");
+			Cache.Remove("vwUSERS_List");
+			Cache.Remove("vwUSERS_Groups");
 			// 05/26/2019 Paul.  Clear the React client data. 
-			memoryCache.Remove("vwUSERS.ReactClient");
+			Cache.Remove("vwUSERS.ReactClient");
 		}
 
 		// 05/26/2019 Paul.  Clear the React client data. 
 		public void ClearTeams()
 		{
-			memoryCache.Remove("vwTEAMS");
-			memoryCache.Remove("vwTEAMS.ReactClient");
+			Cache.Remove("vwTEAMS");
+			Cache.Remove("vwTEAMS.ReactClient");
 		}
 
 		// 01/18/2007 Paul.  If AssignedUser list, then use the cached value to find the value. 
@@ -499,7 +603,7 @@ namespace SplendidCRM
 				sCACHE_NAME = "vwTEAMS_ASSIGNED_TO." + Security.USER_ID.ToString();
 			else
 				sCACHE_NAME = "vwUSERS_ASSIGNED_TO";
-			DataTable dt = memoryCache.Get(sCACHE_NAME) as DataTable;
+			DataTable dt = Cache.Get(sCACHE_NAME) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -534,7 +638,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set(sCACHE_NAME, dt, DefaultCacheExpiration());
+								Cache.Set(sCACHE_NAME, dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -550,7 +654,7 @@ namespace SplendidCRM
 
 		public DataTable CustomEditModules()
 		{
-			DataTable dt = memoryCache.Get("vwCUSTOM_EDIT_MODULES") as DataTable;
+			DataTable dt = Cache.Get("vwCUSTOM_EDIT_MODULES") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -572,7 +676,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwCUSTOM_EDIT_MODULES", dt, DefaultCacheExpiration());
+								Cache.Set("vwCUSTOM_EDIT_MODULES", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -589,7 +693,7 @@ namespace SplendidCRM
 		// 11/02/2009 Paul.  We will need a list of modules to manage offline clients. 
 		public List<String> AccessibleModules(Guid gUSER_ID)
 		{
-			List<String> arr = memoryCache.Get("vwMODULES_Access_ByUser_" + gUSER_ID.ToString()) as List<String>;
+			List<String> arr = Cache.Get("vwMODULES_Access_ByUser_" + gUSER_ID.ToString()) as List<String>;
 			if ( arr == null )
 			{
 				arr = new List<String>();
@@ -631,7 +735,7 @@ namespace SplendidCRM
 												Debug.WriteLine(sMODULE_NAME + " does not exist");
 											}
 										}
-										memoryCache.Set("vwMODULES_Access_ByUser_" + gUSER_ID.ToString(), arr, DefaultCacheExpiration());
+										Cache.Set("vwMODULES_Access_ByUser_" + gUSER_ID.ToString(), arr, DefaultCacheExpiration());
 									}
 									else
 									{
@@ -672,7 +776,7 @@ namespace SplendidCRM
 		// 01/24/2018 Paul.  The Calendar needs to determine if Calls module is enabled. 
 		public DataTable AccessibleModulesTable(Guid gUSER_ID)
 		{
-			DataTable dt = memoryCache.Get("vwMODULES_AccessTable_ByUser_" + gUSER_ID.ToString()) as DataTable;
+			DataTable dt = Cache.Get("vwMODULES_AccessTable_ByUser_" + gUSER_ID.ToString()) as DataTable;
 			if ( dt == null )
 			{
 				dt = new DataTable();
@@ -712,7 +816,7 @@ namespace SplendidCRM
 										}
 									}
 									dt.AcceptChanges();
-									memoryCache.Set("vwMODULES_AccessTable_ByUser_" + gUSER_ID.ToString(), dt, DefaultCacheExpiration());
+									Cache.Set("vwMODULES_AccessTable_ByUser_" + gUSER_ID.ToString(), dt, DefaultCacheExpiration());
 								}
 							}
 						}
@@ -726,10 +830,194 @@ namespace SplendidCRM
 			return dt;
 		}
 
+		public DataTable ReportingModules()
+		{
+			// 08/06/2008 Paul.  Module names are returned translated, so make sure to cache based on the language. 
+			DataTable dt = Cache.Get(L10n.NAME + ".vwMODULES_Reporting_" + Security.USER_ID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 12/06/2009 Paul.  We need the ID and TABLE_NAME when generating the SemanticModel for the ReportBuilder. 
+						// 07/23/2010 Paul.  Make sure to sort the Modules table. 
+						sSQL = "select ID                      " + ControlChars.CrLf
+						     + "     , TABLE_NAME              " + ControlChars.CrLf
+						     + "     , MODULE_NAME             " + ControlChars.CrLf
+						     + "     , DISPLAY_NAME            " + ControlChars.CrLf
+						     + "  from vwMODULES_Reporting     " + ControlChars.CrLf
+						     + " where USER_ID = @USER_ID      " + ControlChars.CrLf
+						     + "    or USER_ID is null         " + ControlChars.CrLf
+						     + " order by DISPLAY_NAME         " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							Sql.AddParameter(cmd, "@USER_ID", Security.USER_ID);
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								foreach(DataRow row in dt.Rows)
+								{
+									row["DISPLAY_NAME"] = L10n.Term(Sql.ToString(row["DISPLAY_NAME"]));
+								}
+								Cache.Set(L10n.NAME + ".vwMODULES_Reporting_" + Security.USER_ID.ToString(), dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		// 11/10/2010 Paul.  vwMODULES_Rules is nearly identical to vwMODULES_Reporting. 
+		public DataTable RulesModules()
+		{
+			// 08/06/2008 Paul.  Module names are returned translated, so make sure to cache based on the language. 
+			DataTable dt = Cache.Get(L10n.NAME + ".vwMODULES_Rules_" + Security.USER_ID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 12/06/2009 Paul.  We need the ID and TABLE_NAME when generating the SemanticModel for the ReportBuilder. 
+						// 07/23/2010 Paul.  Make sure to sort the Modules table. 
+						sSQL = "select ID                      " + ControlChars.CrLf
+						     + "     , TABLE_NAME              " + ControlChars.CrLf
+						     + "     , MODULE_NAME             " + ControlChars.CrLf
+						     + "     , DISPLAY_NAME            " + ControlChars.CrLf
+						     + "  from vwMODULES_Rules         " + ControlChars.CrLf
+						     + " where USER_ID = @USER_ID      " + ControlChars.CrLf
+						     + "    or USER_ID is null         " + ControlChars.CrLf
+						     + " order by DISPLAY_NAME         " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							Sql.AddParameter(cmd, "@USER_ID", Security.USER_ID);
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								foreach(DataRow row in dt.Rows)
+								{
+									row["DISPLAY_NAME"] = L10n.Term(Sql.ToString(row["DISPLAY_NAME"]));
+								}
+								Cache.Set(L10n.NAME + ".vwMODULES_Rules_" + Security.USER_ID.ToString(), dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		public DataTable WorkflowModules()
+		{
+			// 08/06/2008 Paul.  Module names are returned translated, so make sure to cache based on the language. 
+			DataTable dt = Cache.Get(L10n.NAME + ".vwMODULES_Workflow") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select MODULE_NAME             " + ControlChars.CrLf
+						     + "     , DISPLAY_NAME            " + ControlChars.CrLf
+						     + "  from vwMODULES_Workflow      " + ControlChars.CrLf
+						     + " order by MODULE_NAME          " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								foreach(DataRow row in dt.Rows)
+								{
+									row["DISPLAY_NAME"] = L10n.Term(Sql.ToString(row["DISPLAY_NAME"]));
+								}
+								Cache.Set(L10n.NAME + ".vwMODULES_Workflow", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		public DataTable WorkflowRelationships()
+		{
+			// 08/06/2008 Paul.  Module names are returned translated, so make sure to cache based on the language. 
+			DataTable dt = Cache.Get(L10n.NAME + ".vwRELATIONSHIPS_Workflow") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select *                        " + ControlChars.CrLf
+						     + "  from vwRELATIONSHIPS_Workflow" + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								foreach(DataRow row in dt.Rows)
+								{
+									row["DISPLAY_NAME"] = L10n.Term(Sql.ToString(row["DISPLAY_NAME"]));
+								}
+								Cache.Set(L10n.NAME + ".vwRELATIONSHIPS_Workflow", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
 		// 07/01/2019 Paul.  The SubPanelsView needs to understand how to manage all relationships. 
 		public Dictionary<string, object> GetAllRelationships()
 		{
-			Dictionary<string, object> objs = memoryCache.Get("vwRELATIONSHIPS.ReactClient") as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwRELATIONSHIPS.ReactClient") as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -812,7 +1100,7 @@ namespace SplendidCRM
 											}
 											rhs.Add(drow);
 										}
-										memoryCache.Set("vwRELATIONSHIPS.ReactClient", objs, DefaultCacheExpiration());
+										Cache.Set("vwRELATIONSHIPS.ReactClient", objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -828,11 +1116,10 @@ namespace SplendidCRM
 			return objs;
 		}
 
-
 		public DataTable ImportModules()
 		{
 			// 08/06/2008 Paul.  Module names are returned translated, so make sure to cache based on the language. 
-			DataTable dt = memoryCache.Get(L10n.NAME + ".vwMODULES_Import_" + Security.USER_ID.ToString()) as DataTable;
+			DataTable dt = Cache.Get(L10n.NAME + ".vwMODULES_Import_" + Security.USER_ID.ToString()) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -860,7 +1147,7 @@ namespace SplendidCRM
 								{
 									row["DISPLAY_NAME"] = L10n.Term(Sql.ToString(row["DISPLAY_NAME"]));
 								}
-								memoryCache.Set(L10n.NAME + ".vwMODULES_Import_" + Security.USER_ID.ToString(), dt, DefaultCacheExpiration());
+								Cache.Set(L10n.NAME + ".vwMODULES_Import_" + Security.USER_ID.ToString(), dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -874,9 +1161,22 @@ namespace SplendidCRM
 			return dt;
 		}
 
+		public string[] ReportingModulesList()
+		{
+			// 07/23/2010 Paul.  Make sure to sort the Modules table. 
+			DataView vw = new DataView(this.ReportingModules());
+			vw.Sort = "DISPLAY_NAME";
+			string[] arr = new string[vw.Count];
+			for ( int i = 0; i < vw.Count; i++ )
+			{
+				arr[i] = Sql.ToString(vw[i]["MODULE_NAME"]);
+			}
+			return arr;
+		}
+
 		public DataTable ReportingRelationships()
 		{
-			DataTable dt = memoryCache.Get("vwRELATIONSHIPS_Reporting") as DataTable;
+			DataTable dt = Cache.Get("vwRELATIONSHIPS_Reporting") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -896,7 +1196,294 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwRELATIONSHIPS_Reporting", dt, DefaultCacheExpiration());
+								Cache.Set("vwRELATIONSHIPS_Reporting", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					// 10/20/2009 Paul.  Make sure to pass the Application as this function can be called in a background task. 
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		public void ClearFilterColumns(string sMODULE_NAME)
+		{
+			Cache.Remove("vwSqlColumns_Reporting." + sMODULE_NAME);
+			Cache.Remove("vwSqlColumns_Workflow."  + sMODULE_NAME);
+		}
+
+		// 10/20/2009 Paul.  We need to allow the ReportingFilterColumns to be called from a background task. 
+		public DataTable ReportingFilterColumns(string sMODULE_NAME)
+		{
+			DataTable dt = Cache.Get("vwSqlColumns_Reporting." + sMODULE_NAME) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 02/29/2008 Niall.  Some SQL Server 2005 installations require matching case for the parameters. 
+						// Since we force the parameter to be uppercase, we must also make it uppercase in the command text. 
+						sSQL = "select *                       " + ControlChars.CrLf
+						     + "  from vwSqlColumns_Reporting  " + ControlChars.CrLf
+						     + " where ObjectName = @OBJECTNAME" + ControlChars.CrLf
+						     + " order by colid                " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							// 09/02/2008 Paul.  Standardize the case of metadata tables to uppercase.  PostgreSQL defaults to lowercase. 
+							Sql.AddParameter(cmd, "@OBJECTNAME", Sql.MetadataName(cmd, "vw" + sMODULE_NAME));
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								// 06/10/2006 Paul.  The default sliding scale is not appropriate as columns can be added. 
+								Cache.Set("vwSqlColumns_Reporting." + sMODULE_NAME, dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					// 10/20/2009 Paul.  Make sure to pass the Application as this function can be called in a background task. 
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 09/30/2018 Paul.  Add survey record creation to survey. 
+		public DataTable SurveyTargetColumns(string sMODULE_NAME)
+		{
+			DataTable dt = Cache.Get("vwSqlColumns_SurveyTarget." + sMODULE_NAME) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select *                        " + ControlChars.CrLf
+						     + "  from vwSqlColumns_SurveyTarget" + ControlChars.CrLf
+						     + " where ObjectName = @OBJECTNAME " + ControlChars.CrLf
+						     + " order by colid                 " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							Sql.AddParameter(cmd, "@OBJECTNAME", Sql.MetadataName(cmd, "sp" + CrmModules.TableName(sMODULE_NAME) + "_Update"));
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwSqlColumns_SurveyTarget." + sMODULE_NAME, dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					// 10/20/2009 Paul.  Make sure to pass the Application as this function can be called in a background task. 
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 06/03/2009 Paul.  This function can be call from the workflow engine, so we need to pass in the application. 
+		// 07/23/2008 Paul.  Use a separate view for workflow so that we can filter the audting fields. 
+		public DataTable WorkflowFilterColumns(string sMODULE_NAME)
+		{
+			DataTable dt = Cache.Get("vwSqlColumns_Workflow." + sMODULE_NAME) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 02/29/2008 Niall.  Some SQL Server 2005 installations require matching case for the parameters. 
+						// Since we force the parameter to be uppercase, we must also make it uppercase in the command text. 
+						sSQL = "select *                       " + ControlChars.CrLf
+						     + "  from vwSqlColumns_Workflow   " + ControlChars.CrLf
+						     + " where ObjectName = @OBJECTNAME" + ControlChars.CrLf
+						     + " order by colid                " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							// 07/22/2008 Paul.  There are no views for the audit tables. 
+							// 09/02/2008 Paul.  Standardize the case of metadata tables to uppercase.  PostgreSQL defaults to lowercase. 
+							// 11/26/2008 Paul.  We now have audit views. 
+							Sql.AddParameter(cmd, "@OBJECTNAME", Sql.MetadataName(cmd, "vw" + sMODULE_NAME));
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								// 06/10/2006 Paul.  The default sliding scale is not appropriate as columns can be added. 
+								Cache.Set("vwSqlColumns_Workflow." + sMODULE_NAME, dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					// 10/20/2009 Paul.  Make sure to pass the Application as this function can be called in a background task. 
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		public DataTable WorkflowFilterUpdateColumns(string sMODULE_NAME)
+		{
+			DataTable dt = Cache.Get("vwSqlColumns_WorkflowUpdate." + sMODULE_NAME) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 02/29/2008 Niall.  Some SQL Server 2005 installations require matching case for the parameters. 
+						// Since we force the parameter to be uppercase, we must also make it uppercase in the command text. 
+						// 02/18/2009 Paul.  Include the custom fields in the list of workflow columns that can be updated. 
+						// 02/18/2009 Paul.  We need to know if the column is an identity so the workflow engine can avoid updating it.
+						sSQL = "select ObjectName                                      " + ControlChars.CrLf
+						     + "     , ColumnName                                      " + ControlChars.CrLf
+						     + "     , ColumnType                                      " + ControlChars.CrLf
+						     + "     , NAME                                            " + ControlChars.CrLf
+						     + "     , DISPLAY_NAME                                    " + ControlChars.CrLf
+						     + "     , SqlDbType                                       " + ControlChars.CrLf
+						     + "     , CsType                                          " + ControlChars.CrLf
+						     + "     , colid                                           " + ControlChars.CrLf
+						     + "     , IsIdentity                                      " + ControlChars.CrLf
+						     + "  from vwSqlColumns_WorkflowUpdate                     " + ControlChars.CrLf
+						     + " where ObjectName = @OBJECTNAME                        " + ControlChars.CrLf
+						     + "union all                                              " + ControlChars.CrLf
+						     + "select ObjectName                                      " + ControlChars.CrLf
+						     + "     , ColumnName                                      " + ControlChars.CrLf
+						     + "     , ColumnType                                      " + ControlChars.CrLf
+						     + "     , vwSqlColumns_WorkflowUpdate.NAME                " + ControlChars.CrLf
+						     + "     , DISPLAY_NAME                                    " + ControlChars.CrLf
+						     + "     , SqlDbType                                       " + ControlChars.CrLf
+						     + "     , vwSqlColumns_WorkflowUpdate.CsType              " + ControlChars.CrLf
+						     + "     , vwSqlColumns_WorkflowUpdate.colid + 100 as colid" + ControlChars.CrLf
+						     + "     , vwSqlColumns_WorkflowUpdate.IsIdentity          " + ControlChars.CrLf
+						     + "  from      vwFIELDS_META_DATA_Validated               " + ControlChars.CrLf
+						     + " inner join vwSqlColumns_WorkflowUpdate                " + ControlChars.CrLf
+						     + "         on vwSqlColumns_WorkflowUpdate.ObjectName = vwFIELDS_META_DATA_Validated.TABLE_NAME + '_CSTM'" + ControlChars.CrLf
+						     + "        and vwSqlColumns_WorkflowUpdate.NAME       = vwFIELDS_META_DATA_Validated.NAME" + ControlChars.CrLf
+						     + " where vwFIELDS_META_DATA_Validated.MODULE_NAME = @MODULE_NAME" + ControlChars.CrLf
+						     + " order by colid                                        " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							// 08/13/2008 Paul.  When updating inside the workflow engine, we can only update the core fields at this time. 
+							// So make sure to match the fields with the update procedure. 
+							// 09/02/2008 Paul.  Standardize the case of metadata tables to uppercase.  PostgreSQL defaults to lowercase. 
+							Sql.AddParameter(cmd, "@OBJECTNAME", Sql.MetadataName(cmd, "sp" + sMODULE_NAME + "_Update"));
+							Sql.AddParameter(cmd, "@MODULE_NAME", sMODULE_NAME);
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								// 06/10/2006 Paul.  The default sliding scale is not appropriate as columns can be added. 
+								Cache.Set("vwSqlColumns_WorkflowUpdate." + sMODULE_NAME, dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 06/03/2009 Paul.  This function can be call from the workflow engine, so we need to pass in the application. 
+		public string ReportingFilterColumnsListName(string sMODULE_NAME, string sDATA_FIELD)
+		{
+			string sLIST_NAME = Cache.Get("vwSqlColumns_ListName." + sMODULE_NAME + "." + sDATA_FIELD) as string;
+			if ( sLIST_NAME == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 02/29/2008 Niall.  Some SQL Server 2005 installations require matching case for the parameters. 
+						// Since we force the parameter to be uppercase, we must also make it uppercase in the command text. 
+						sSQL = "select LIST_NAME               " + ControlChars.CrLf
+						     + "  from vwSqlColumns_ListName   " + ControlChars.CrLf
+						     + " where ObjectName = @OBJECTNAME" + ControlChars.CrLf
+						     + "   and DATA_FIELD = @DATA_FIELD" + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							// 09/02/2008 Paul.  Standardize the case of metadata tables to uppercase.  PostgreSQL defaults to lowercase. 
+							Sql.AddParameter(cmd, "@OBJECTNAME", Sql.MetadataName(cmd, "vw" + sMODULE_NAME));
+							Sql.AddParameter(cmd, "@DATA_FIELD", sDATA_FIELD);
+							// 07/16/2008 Paul.  Don't need the data adapter. 
+							sLIST_NAME = Sql.ToString(cmd.ExecuteScalar());
+							Cache.Set("vwSqlColumns_ListName." + sMODULE_NAME + "." + sDATA_FIELD, sLIST_NAME, DefaultCacheExpiration());
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					// 10/20/2009 Paul.  Make sure to pass the Application as this function can be called in a background task. 
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return sLIST_NAME;
+		}
+
+		public DataTable GetAllReportingFilterColumnsListName()
+		{
+			DataTable dt = Cache.Get("vwSqlColumns_ListName.AllModules") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select distinct                 " + ControlChars.CrLf
+						     + "       ObjectName               " + ControlChars.CrLf
+						     + "     , DATA_FIELD               " + ControlChars.CrLf
+						     + "     , LIST_NAME                " + ControlChars.CrLf
+						     + "  from vwSqlColumns_ListName    " + ControlChars.CrLf
+						     + " order by ObjectName, DATA_FIELD" + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwSqlColumns_ListName.AllModules", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -912,7 +1499,7 @@ namespace SplendidCRM
 
 		public DataTable ImportColumns(string sMODULE_NAME)
 		{
-			DataTable dt = memoryCache.Get("vwSqlColumns_Import." + sMODULE_NAME) as DataTable;
+			DataTable dt = Cache.Get("vwSqlColumns_Import." + sMODULE_NAME) as DataTable;
 			if ( dt == null )
 			{
 				string sTABLE_NAME = Sql.ToString(Application["Modules." + sMODULE_NAME + ".TableName"]);
@@ -943,7 +1530,7 @@ namespace SplendidCRM
 								dt = new DataTable();
 								da.Fill(dt);
 								// 06/10/2006 Paul.  The default sliding scale is not appropriate as columns can be added. 
-								memoryCache.Set("vwSqlColumns_Import." + sMODULE_NAME, dt, DefaultCacheExpiration());
+								Cache.Set("vwSqlColumns_Import." + sMODULE_NAME, dt, DefaultCacheExpiration());
 							}
 						}
 						*/
@@ -1051,7 +1638,321 @@ namespace SplendidCRM
 								}
 							}
 						}
-						memoryCache.Set("vwSqlColumns_Import." + sMODULE_NAME, dt, DefaultCacheExpiration());
+						Cache.Set("vwSqlColumns_Import." + sMODULE_NAME, dt, DefaultCacheExpiration());
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		public DataTable Release()
+		{
+			DataTable dt = Cache.Get("vwRELEASES_LISTBOX") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select ID                " + ControlChars.CrLf
+						     + "     , NAME              " + ControlChars.CrLf
+						     + "  from vwRELEASES_LISTBOX" + ControlChars.CrLf
+						     + " order by LIST_ORDER     " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwRELEASES_LISTBOX", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		public DataTable ProductCategories()
+		{
+			DataTable dt = Cache.Get("vwPRODUCT_CATEGORIES_LISTBOX") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select ID                          " + ControlChars.CrLf
+						     + "     , NAME                        " + ControlChars.CrLf
+						     + "  from vwPRODUCT_CATEGORIES_LISTBOX" + ControlChars.CrLf
+						     + " order by LIST_ORDER               " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwPRODUCT_CATEGORIES_LISTBOX", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		// 05/19/2012 Paul.  ProductTypes needs to be called from the scheduler, so the application must be provided. 
+		public DataTable ProductTypes()
+		{
+			DataTable dt = Cache.Get("vwPRODUCT_TYPES_LISTBOX") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select ID                     " + ControlChars.CrLf
+						     + "     , NAME                   " + ControlChars.CrLf
+						     + "  from vwPRODUCT_TYPES_LISTBOX" + ControlChars.CrLf
+						     + " order by LIST_ORDER          " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwPRODUCT_TYPES_LISTBOX", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		public DataTable Manufacturers()
+		{
+			DataTable dt = Cache.Get("vwMANUFACTURERS_LISTBOX") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select ID                     " + ControlChars.CrLf
+						     + "     , NAME                   " + ControlChars.CrLf
+						     + "  from vwMANUFACTURERS_LISTBOX" + ControlChars.CrLf
+						     + " order by LIST_ORDER          " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwMANUFACTURERS_LISTBOX", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		// 08/13/2010 Paul.  Add discounts to line items. 
+		public DataTable Discounts()
+		{
+			DataTable dt = Cache.Get("vwDISCOUNTS_LISTBOX") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 08/15/2010 Paul.  We need all the discount fields. 
+						sSQL = "select *                  " + ControlChars.CrLf
+						     + "  from vwDISCOUNTS_LISTBOX" + ControlChars.CrLf
+						     + " order by NAME            " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwDISCOUNTS_LISTBOX", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		public void ClearDiscounts()
+		{
+			Cache.Remove("vwDISCOUNTS_LISTBOX");
+			Cache.Remove("vwDISCOUNTS_LISTBOX.ReactClient");
+		}
+
+		public DataTable Shippers()
+		{
+			DataTable dt = Cache.Get("vwSHIPPERS_LISTBOX") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select ID                " + ControlChars.CrLf
+						     + "     , NAME              " + ControlChars.CrLf
+						     + "  from vwSHIPPERS_LISTBOX" + ControlChars.CrLf
+						     + " order by LIST_ORDER     " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwSHIPPERS_LISTBOX", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		// 02/15/2015 Paul.  Change from terminology payment_types_dom to PaymentTypes list for QuickBooks Online. 
+		public DataTable PaymentTypes()
+		{
+			DataTable dt = Cache.Get("vwPAYMENT_TYPES_LISTBOX") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 02/16/2015 Paul.  In order to remain compatible with existing systems, use NAME instead of ID as the primary key. 
+						sSQL = "select NAME as ID             " + ControlChars.CrLf
+						     + "     , NAME                   " + ControlChars.CrLf
+						     + "  from vwPAYMENT_TYPES_LISTBOX" + ControlChars.CrLf
+						     + " order by LIST_ORDER          " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwPAYMENT_TYPES_LISTBOX", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 02/15/2015 Paul.  Change from terminology payment_terms_dom to PaymentTerms list for QuickBooks Online. 
+		public DataTable PaymentTerms()
+		{
+			DataTable dt = Cache.Get("vwPAYMENT_TERMS_LISTBOX") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 02/16/2015 Paul.  In order to remain compatible with existing systems, use NAME instead of ID as the primary key. 
+						sSQL = "select NAME as ID             " + ControlChars.CrLf
+						     + "     , NAME                   " + ControlChars.CrLf
+						     + "  from vwPAYMENT_TERMS_LISTBOX" + ControlChars.CrLf
+						     + " order by LIST_ORDER          " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwPAYMENT_TERMS_LISTBOX", dt, DefaultCacheExpiration());
+							}
+						}
 					}
 				}
 				catch(Exception ex)
@@ -1065,7 +1966,7 @@ namespace SplendidCRM
 		// 12/21/2010 Paul.  Allow regions to be used in a list. 
 		public DataTable Regions()
 		{
-			DataTable dt = memoryCache.Get("vwREGIONS") as DataTable;
+			DataTable dt = Cache.Get("vwREGIONS") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -1087,7 +1988,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwREGIONS", dt, DefaultCacheExpiration());
+								Cache.Set("vwREGIONS", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -1101,15 +2002,112 @@ namespace SplendidCRM
 			return dt;
 		}
 
-		public DataTable Currencies()
+		// 06/29/2014 Paul.  Add support for http://www.zip-tax.com/. 
+		public void ClearTaxRates()
 		{
-			return Currencies(Application);
+			Cache.Remove("vwTAX_RATES_LISTBOX");
+			Cache.Remove("vwTAX_RATES_LISTBOX.ReactClient");
+		}
+
+		public DataTable TaxRates()
+		{
+			DataTable dt = Cache.Get("vwTAX_RATES_LISTBOX") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 03/31/2007 Paul.  We need to cache the tax rate value for quick access in Quotes and Orders. 
+						// 04/07/2016 Paul.  Tax rates per team. 
+						sSQL = "select *                  " + ControlChars.CrLf
+						     + "  from vwTAX_RATES_LISTBOX" + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							// 04/07/2016 Paul.  Tax rates per team. 
+							if ( Sql.ToBoolean(Application["CONFIG.Orders.EnableTaxRateTeams"]) )
+								Security.Filter(cmd, "TaxRates", "list");
+							cmd.CommandText += " order by LIST_ORDER      " + ControlChars.CrLf;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								// 06/29/2014 Paul.  Automatically add the tax rate to the display name. 
+								foreach ( DataRow row in dt.Rows )
+								{
+									string  sNAME  = Sql.ToString (row["NAME" ]);
+									Decimal dVALUE = Sql.ToDecimal(row["VALUE"]);
+									if ( !sNAME.EndsWith("%") )
+									{
+										string  sVALUE = dVALUE.ToString("0.000");
+										// 06/29/2014 Paul.  Only use the third decimal place when necessary. 
+										if ( sVALUE.EndsWith("0") )
+											sVALUE = sVALUE.Substring(0, sVALUE.Length - 1);
+										sNAME += "  " + sVALUE + "%";
+										row["NAME"] = sNAME;
+									}
+								}
+								Cache.Set("vwTAX_RATES_LISTBOX", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		public DataTable ContractTypes()
+		{
+			DataTable dt = Cache.Get("vwCONTRACT_TYPES_LISTBOX") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select ID                      " + ControlChars.CrLf
+						     + "     , NAME                    " + ControlChars.CrLf
+						     + "  from vwCONTRACT_TYPES_LISTBOX" + ControlChars.CrLf
+						     + " order by LIST_ORDER           " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwCONTRACT_TYPES_LISTBOX", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
 		}
 
 		// 07/12/2014 Paul.  Currencies needs to be called from the scheduler, so the application must be provided. 
-		public DataTable Currencies(HttpApplicationState Application)
+		public DataTable Currencies()
 		{
-			DataTable dt = memoryCache.Get("vwCURRENCIES_LISTBOX") as DataTable;
+			DataTable dt = Cache.Get("vwCURRENCIES_LISTBOX") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -1136,7 +2134,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwCURRENCIES_LISTBOX", dt, DefaultCacheExpiration());
+								Cache.Set("vwCURRENCIES_LISTBOX", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -1150,15 +2148,10 @@ namespace SplendidCRM
 			return dt;
 		}
 
+		// 09/12/2019 Paul.  Timezones needs to be called from the React Client, so the application must be provided. 
 		public DataTable Timezones()
 		{
-			return Timezones(Application);
-		}
-
-		// 09/12/2019 Paul.  Timezones needs to be called from the React Client, so the application must be provided. 
-		public DataTable Timezones(HttpApplicationState Application)
-		{
-			DataTable dt = memoryCache.Get("vwTIMEZONES") as DataTable;
+			DataTable dt = Cache.Get("vwTIMEZONES") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -1180,7 +2173,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwTIMEZONES", dt, DefaultCacheExpiration());
+								Cache.Set("vwTIMEZONES", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -1196,7 +2189,7 @@ namespace SplendidCRM
 
 		public DataTable TimezonesListbox()
 		{
-			DataTable dt = memoryCache.Get("vwTIMEZONES_LISTBOX") as DataTable;
+			DataTable dt = Cache.Get("vwTIMEZONES_LISTBOX") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -1218,7 +2211,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwTIMEZONES_LISTBOX", dt, DefaultCacheExpiration());
+								Cache.Set("vwTIMEZONES_LISTBOX", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -1235,19 +2228,14 @@ namespace SplendidCRM
 		public void ClearLanguages()
 		{
 			// 02/18/2008 Paul.  HttpRuntime.Cache is a better and faster way to get to the cache. 
-			memoryCache.Remove("vwLANGUAGES");
+			Cache.Remove("vwLANGUAGES");
 		}
 
 		//.02/18/2008 Paul.  Languages will also be used in the UI, so provide a version without parameters. 
+		// 02/18/2008 Paul.  Languages needs to be called from the scheduler, so the application must be provided. 
 		public DataTable Languages()
 		{
-			return Languages(Application);
-		}
-
-		// 02/18/2008 Paul.  Languages needs to be called from the scheduler, so the application must be provided. 
-		public DataTable Languages(HttpApplicationState Application)
-		{
-			DataTable dt = memoryCache.Get("vwLANGUAGES") as DataTable;
+			DataTable dt = Cache.Get("vwLANGUAGES") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -1272,7 +2260,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwLANGUAGES", dt, DefaultCacheExpiration());
+								Cache.Set("vwLANGUAGES", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -1290,7 +2278,7 @@ namespace SplendidCRM
 		// 10/24/2009 Paul.  Pass the context instead of the Application so that more information will be available to the error handling. 
 		public DataTable ModulesPopups()
 		{
-			DataTable dt = memoryCache.Get("vwMODULES_Popup") as DataTable;
+			DataTable dt = Cache.Get("vwMODULES_Popup") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -1333,7 +2321,201 @@ namespace SplendidCRM
 									sRELATIVE_PATH = sRELATIVE_PATH.Replace("~/", Sql.ToString(Application["rootURL"]));
 									row["RELATIVE_PATH"] = sRELATIVE_PATH;
 								}
-								memoryCache.Set("vwMODULES_Popup", dt, DefaultCacheExpiration());
+								Cache.Set("vwMODULES_Popup", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 04/03/2010 Paul.  Exchange Sync is a per-module feature, even though only Accounts, Bugs, Cases, Leads, Opportunities and Projects are available. 
+		public DataTable ExchangeModulesSync()
+		{
+			DataTable dt = Cache.Get("vwMODULES_ExchangeSync") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select MODULE_NAME      " + ControlChars.CrLf
+						     + "     , EXCHANGE_FOLDERS " + ControlChars.CrLf
+						     + "  from vwMODULES        " + ControlChars.CrLf
+						     + " where EXCHANGE_SYNC = 1" + ControlChars.CrLf
+						     + " order by MODULE_NAME   " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwMODULES_ExchangeSync", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		public DateTime ExchangeFolderCacheExpiration()
+		{
+#if DEBUG
+			return DateTime.Now.AddSeconds(1);
+#else
+			return DateTime.Now.AddHours(1);
+#endif
+		}
+
+		public void ClearExchangeFolders(Guid gUSER_ID)
+		{
+			Cache.Remove("vwEXCHANGE_FOLDERS." + gUSER_ID.ToString());
+		}
+
+		public DataTable ExchangeFolders(Guid gUSER_ID)
+		{
+			DataTable dt = Cache.Get("vwEXCHANGE_FOLDERS." + gUSER_ID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 04/25/2010 Paul.  We want the well known folders to be first. 
+						sSQL = "select *                                    " + ControlChars.CrLf
+						     + "  from vwEXCHANGE_FOLDERS                   " + ControlChars.CrLf
+						     + " where ASSIGNED_USER_ID = @ASSIGNED_USER_ID " + ControlChars.CrLf
+						     + " order by WELL_KNOWN_FOLDER desc, MODULE_NAME, PARENT_NAME, REMOTE_KEY" + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							Sql.AddParameter(cmd, "@ASSIGNED_USER_ID", gUSER_ID);
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwEXCHANGE_FOLDERS." + gUSER_ID.ToString(), dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 10/19/2010 Paul.  Clear the PaymentGateways cache. 
+		public void ClearPaymentGateways()
+		{
+			Cache.Remove("vwPAYMENT_GATEWAYS");
+		}
+
+		public DataTable PaymentGateways()
+		{
+			DataTable dt = Cache.Get("vwPAYMENT_GATEWAYS") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select *                 " + ControlChars.CrLf
+						     + "  from vwPAYMENT_GATEWAYS" + ControlChars.CrLf
+						     + " order by NAME           " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwPAYMENT_GATEWAYS", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 04/22/2010 Paul.  We need to clear the module folders table any time the subscription changes. 
+		public void ClearExchangeModulesFolders(string sMODULE_NAME, Guid gUSER_ID)
+		{
+			string sTABLE_NAME = CrmModules.TableName(sMODULE_NAME);
+			Cache.Remove("vw" + sTABLE_NAME + "_ExchangeFolders." + gUSER_ID.ToString());
+		}
+
+		// 04/04/2010 Paul.  Exchange Folders is a per-module feature, even though only Accounts, Bugs, Cases, Leads, Opportunities and Projects are available. 
+		public DataTable ExchangeModulesFolders(string sMODULE_NAME, Guid gUSER_ID)
+		{
+			string sTABLE_NAME = CrmModules.TableName(sMODULE_NAME);
+			DataTable dt = Cache.Get("vw" + sTABLE_NAME + "_ExchangeFolders." + gUSER_ID.ToString()) as DataTable;
+			//04/04/2010 Paul.  ExchangeModulesFolders can return NULL if Exchange Folders is not supported. 
+			// At this time, only Accounts, Bugs, Cases, Contacts, Leads, Opportunities and Projects are supported. 
+			if ( dt == null && (   sMODULE_NAME == "Accounts" 
+			                    || sMODULE_NAME == "Bugs" 
+			                    || sMODULE_NAME == "Cases" 
+			                    || sMODULE_NAME == "Contacts" 
+			                    || sMODULE_NAME == "Leads" 
+			                    || sMODULE_NAME == "Opportunities" 
+			                    || sMODULE_NAME == "Project"
+			                   )
+			   )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL = String.Empty;
+						// 05/14/2010 Paul.  We need the NEW_FOLDER flag to determine if we should perform a first SyncAll. 
+						sSQL = "select ID                                  " + ControlChars.CrLf
+						     + "     , NAME                                " + ControlChars.CrLf
+						     + "     , NEW_FOLDER                          " + ControlChars.CrLf
+						     + "  from vw" + sTABLE_NAME + "_ExchangeFolder" + ControlChars.CrLf
+						     + " where USER_ID = @USER_ID                  " + ControlChars.CrLf
+						     + " order by NAME                             " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							Sql.AddParameter(cmd, "@USER_ID", gUSER_ID);
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vw" + sTABLE_NAME + "_ExchangeFolders." + gUSER_ID.ToString(), dt, ExchangeFolderCacheExpiration());
 							}
 						}
 					}
@@ -1349,7 +2531,7 @@ namespace SplendidCRM
 		public DataTable Modules()
 		{
 			// 05/27/2009 Paul.  Module names are returned translated, so make sure to cache based on the language. 
-			DataTable dt = memoryCache.Get(L10n.NAME + ".vwMODULES") as DataTable;
+			DataTable dt = Cache.Get(L10n.NAME + ".vwMODULES") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -1375,7 +2557,7 @@ namespace SplendidCRM
 								{
 									row["DISPLAY_NAME"] = L10n.Term(Sql.ToString(row["DISPLAY_NAME"]));
 								}
-								memoryCache.Set(L10n.NAME + ".vwMODULES", dt, DefaultCacheExpiration());
+								Cache.Set(L10n.NAME + ".vwMODULES", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -1394,7 +2576,7 @@ namespace SplendidCRM
 		{
 			// 08/09/2020 Paul.  Convert to comma separated string. 
 			string sModuleList = String.Join(",", lstMODULES.ToArray());
-			Dictionary<string, object> objs = memoryCache.Get("vwMODULES.ReactClient." + sModuleList) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwMODULES.ReactClient." + sModuleList) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -1461,7 +2643,7 @@ namespace SplendidCRM
 												}
 											}
 										}
-										memoryCache.Set("vwMODULES.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
+										Cache.Set("vwMODULES.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -1481,7 +2663,7 @@ namespace SplendidCRM
 
 		public Dictionary<string, object> GetAdminModules(Dictionary<string, int> dictModuleTabOrder)
 		{
-			Dictionary<string, object> objs = memoryCache.Get("vwMODULES.ReactClient.Admin") as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwMODULES.ReactClient.Admin") as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -1531,7 +2713,7 @@ namespace SplendidCRM
 												objs.Add(sMODULE_NAME, drow);
 											}
 										}
-										memoryCache.Set("vwMODULES.ReactClient.Admin", objs, DefaultCacheExpiration());
+										Cache.Set("vwMODULES.ReactClient.Admin", objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -1552,7 +2734,7 @@ namespace SplendidCRM
 		// 05/17/2019 Paul.  The React client needs to include config with layout data. 
 		public Dictionary<string, object> GetAllConfig()
 		{
-			Dictionary<string, object> objs = memoryCache.Get("vwCONFIG.ReactClient") as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwCONFIG.ReactClient") as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -1597,6 +2779,8 @@ namespace SplendidCRM
 											string sNAME = Sql.ToString(row["NAME"]).ToLower();
 											// 05/17/2019 Paul.  Exclude any possible password or key. 
 											// 07/13/2020 Paul.  Exchange.ClientID and GoogleApps.ClientID are needed by the user profile editor. 
+											// 06/19/2023 Paul.  Twilio.LogInboundMessages looks like "login". 
+											// 06/19/2023 Paul.  Asterisk.LogIncomingMissedCalls like "login". 
 											if ( !(sNAME.Contains("password"    )
 												|| sNAME.Contains("smtppass"    )
 												|| sNAME.Contains("smtpuser"    )
@@ -1613,7 +2797,7 @@ namespace SplendidCRM
 												|| sNAME.Contains("creditcard"  )
 												|| sNAME.Contains("inboundemail")
 												|| sNAME.Contains("accountsid"  )
-												) )
+												) || sNAME.Contains("loginboundmessages") || sNAME.Contains("logincomingmissedcalls") )
 											{
 												sNAME  = Sql.ToString(row["NAME" ]);
 												string sVALUE = Sql.ToString(row["VALUE"]);
@@ -1623,7 +2807,7 @@ namespace SplendidCRM
 												}
 											}
 										}
-										memoryCache.Set("vwCONFIG.ReactClient", objs, DefaultCacheExpiration());
+										Cache.Set("vwCONFIG.ReactClient", objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -1641,7 +2825,7 @@ namespace SplendidCRM
 
 		public Dictionary<string, object> GetLoginConfig()
 		{
-			Dictionary<string, object> objs = memoryCache.Get("vwCONFIG.ReactClient.Login") as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwCONFIG.ReactClient.Login") as Dictionary<string, object>;
 #if DEBUG
 			objs = null;
 #endif
@@ -1700,7 +2884,7 @@ namespace SplendidCRM
 											objs.Add(sNAME, sVALUE);
 										}
 									}
-									memoryCache.Set("vwCONFIG.ReactClient.Login", objs, DefaultCacheExpiration());
+									Cache.Set("vwCONFIG.ReactClient.Login", objs, DefaultCacheExpiration());
 								}
 							}
 						}
@@ -1718,7 +2902,7 @@ namespace SplendidCRM
 		// 08/07/2013 Paul.  Add Undelete module. 
 		public DataTable AuditedModules()
 		{
-			DataTable dt = memoryCache.Get(L10n.NAME + ".vwMODULES_Audited") as DataTable;
+			DataTable dt = Cache.Get(L10n.NAME + ".vwMODULES_Audited") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -1744,7 +2928,7 @@ namespace SplendidCRM
 								{
 									row["DISPLAY_NAME"] = L10n.Term(Sql.ToString(row["DISPLAY_NAME"]));
 								}
-								memoryCache.Set(L10n.NAME + ".vwMODULES_Audited", dt, DefaultCacheExpiration());
+								Cache.Set(L10n.NAME + ".vwMODULES_Audited", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -1759,14 +2943,14 @@ namespace SplendidCRM
 
 		public void ClearTerminologyPickLists()
 		{
-			memoryCache.Remove("vwTERMINOLOGY_PickList");
-			memoryCache.Remove("vwTERMINOLOGY_PickList.ReactClient");
-			memoryCache.Remove("vwTERMINOLOGY_PickList.ReactClient.Admion");
+			Cache.Remove("vwTERMINOLOGY_PickList");
+			Cache.Remove("vwTERMINOLOGY_PickList.ReactClient");
+			Cache.Remove("vwTERMINOLOGY_PickList.ReactClient.Admion");
 		}
 
 		public DataTable TerminologyPickLists()
 		{
-			DataTable dt = memoryCache.Get("vwTERMINOLOGY_PickList") as DataTable;
+			DataTable dt = Cache.Get("vwTERMINOLOGY_PickList") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -1787,7 +2971,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwTERMINOLOGY_PickList", dt, DefaultCacheExpiration());
+								Cache.Set("vwTERMINOLOGY_PickList", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -1803,7 +2987,7 @@ namespace SplendidCRM
 
 		public DataTable ActiveUsers()
 		{
-			DataTable dt = memoryCache.Get("vwUSERS_List") as DataTable;
+			DataTable dt = Cache.Get("vwUSERS_List") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -1826,7 +3010,7 @@ namespace SplendidCRM
 								dt = new DataTable();
 								da.Fill(dt);
 								// 09/16/2005 Paul.  Users change a lot, so have a very short timeout. 
-								memoryCache.Set("vwUSERS_List", dt, DateTime.Now.AddSeconds(15));
+								Cache.Set("vwUSERS_List", dt, DateTime.Now.AddSeconds(15));
 							}
 						}
 					}
@@ -1852,7 +3036,7 @@ namespace SplendidCRM
 				Session.Remove("vwMODULES_TabMenu_ByUser." + Security.USER_ID.ToString());
 				// 11/17/2007 Paul.  Also clear the mobile menu. 
 				Session.Remove("vwMODULES_MobileMenu_ByUser." + Security.USER_ID.ToString());
-				memoryCache.Remove("vwMODULES_Popup");
+				Cache.Remove("vwMODULES_Popup");
 				// 10/24/2009 Paul.  ModulePopupScripts is a very popular file and we need to cache it as often as possible, yet still allow an invalidation for module changes. 
 				// 10/24/2009 Paul.  We still can't use the standard page caching otherwise we risk getting an unauthenticated page cached, which would prevent all popups. 
 				// HttpResponse.RemoveOutputCacheItem("~/Include/javascript/ModulePopupScripts.aspx");
@@ -1867,7 +3051,7 @@ namespace SplendidCRM
 		{
 			// 04/28/2006 Paul.  The menu is now cached in the Session, so it will only get cleared when the user logs out. 
 			// 04/28/2006 Paul.  Include the GUID in the USER_ID to that the user does not have to log-out in order to get the correct menu. 
-			DataTable dt = Session["vwMODULES_TabMenu_ByUser." + Security.USER_ID.ToString()] as DataTable;
+			DataTable dt = Session.GetTable("vwMODULES_TabMenu_ByUser." + Security.USER_ID.ToString());
 			if ( dt == null )
 			{
 				dt = new DataTable();
@@ -1906,7 +3090,7 @@ namespace SplendidCRM
 										}
 									}
 									dt.AcceptChanges();
-									Session["vwMODULES_TabMenu_ByUser." + Security.USER_ID.ToString()] = dt;
+									Session.SetTable("vwMODULES_TabMenu_ByUser." + Security.USER_ID.ToString(), dt);
 								}
 							}
 						}
@@ -1991,11 +3175,55 @@ namespace SplendidCRM
 			return objs;
 		}
 
+		public DataTable TabFeeds()
+		{
+			DataTable dt = Session.GetTable("vwFEEDS_MyTabFeeds_ByUser." + Security.USER_ID.ToString());
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				try
+				{
+					// 11/17/2007 Paul.  New function to determine if user is authenticated. 
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL;
+							sSQL = "select TITLE             " + ControlChars.CrLf
+							     + "     , URL               " + ControlChars.CrLf
+							     + "  from vwFEEDS_MyTabFeeds" + ControlChars.CrLf
+							     + " where USER_ID = @USER_ID" + ControlChars.CrLf
+							     + "    or USER_ID is null   " + ControlChars.CrLf
+							     + " order by RANK           " + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								Sql.AddParameter(cmd, "@USER_ID", Security.USER_ID);
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									da.Fill(dt);
+									Session.SetTable("vwFEEDS_MyTabFeeds_ByUser." + Security.USER_ID.ToString(), dt);
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
 		public DataTable MobileMenu()
 		{
 			// 04/28/2006 Paul.  The menu is now cached in the Session, so it will only get cleared when the user logs out. 
 			// 04/28/2006 Paul.  Include the GUID in the USER_ID to that the user does not have to log-out in order to get the correct menu. 
-			DataTable dt = Session["vwMODULES_MobileMenu_ByUser." + Security.USER_ID.ToString()] as DataTable;
+			DataTable dt = Session.GetTable("vwMODULES_MobileMenu_ByUser." + Security.USER_ID.ToString());
 			if ( dt == null )
 			{
 				dt = new DataTable();
@@ -2024,7 +3252,7 @@ namespace SplendidCRM
 								{
 									((IDbDataAdapter)da).SelectCommand = cmd;
 									da.Fill(dt);
-									Session["vwMODULES_MobileMenu_ByUser." + Security.USER_ID.ToString()] = dt;
+									Session.SetTable("vwMODULES_MobileMenu_ByUser." + Security.USER_ID.ToString(), dt);
 								}
 							}
 						}
@@ -2220,7 +3448,7 @@ namespace SplendidCRM
 
 		public DataTable Themes()
 		{
-			DataTable dt = memoryCache.Get("Themes") as DataTable;
+			DataTable dt = Cache.Get("Themes") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -2253,7 +3481,7 @@ namespace SplendidCRM
 						}
 					}
 					// 11/19/2005 Paul.  The themes cache need never expire as themes almost never change. 
-					memoryCache.Set("Themes", dt, DefaultCacheExpiration());
+					Cache.Set("Themes", dt, DefaultCacheExpiration());
 				}
 				catch(Exception ex)
 				{
@@ -2265,7 +3493,7 @@ namespace SplendidCRM
 
 		public string XmlFile(string sPATH_NAME)
 		{
-			string sDATA = memoryCache.Get("XmlFile." + sPATH_NAME) as string;
+			string sDATA = Cache.Get("XmlFile." + sPATH_NAME) as string;
 			if ( sDATA == null )
 			{
 				try
@@ -2275,7 +3503,7 @@ namespace SplendidCRM
 						sDATA = rd.ReadToEnd();
 					}
 					// 11/19/2005 Paul.  The file cache need never expire as themes almost never change. 
-					memoryCache.Set("XmlFile." + sPATH_NAME, sDATA, DefaultCacheExpiration());
+					Cache.Set("XmlFile." + sPATH_NAME, sDATA, DefaultCacheExpiration());
 				}
 				catch(Exception ex)
 				{
@@ -2288,8 +3516,8 @@ namespace SplendidCRM
 
 		public void ClearGridView(string sGRID_NAME)
 		{
-			memoryCache.Remove("vwGRIDVIEWS_COLUMNS." + sGRID_NAME);
-			memoryCache.Remove("vwGRIDVIEWS_RULES."   + sGRID_NAME);
+			Cache.Remove("vwGRIDVIEWS_COLUMNS." + sGRID_NAME);
+			Cache.Remove("vwGRIDVIEWS_RULES."   + sGRID_NAME);
 		}
 
 		// 05/05/2016 Paul.  The User Primary Role is used with role-based views. 
@@ -2313,7 +3541,7 @@ namespace SplendidCRM
 
 		public DataTable GridViewColumns(string sGRID_NAME)
 		{
-			DataTable dt = memoryCache.Get("vwGRIDVIEWS_COLUMNS." + sGRID_NAME) as DataTable;
+			DataTable dt = Cache.Get("vwGRIDVIEWS_COLUMNS." + sGRID_NAME) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -2339,7 +3567,126 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwGRIDVIEWS_COLUMNS." + sGRID_NAME, dt, DefaultCacheExpiration());
+								Cache.Set("vwGRIDVIEWS_COLUMNS." + sGRID_NAME, dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 11/21/2005 Paul. Ignore error, but then we need to find a way to display the connection error. 
+					// The most likely failure here is a connection failure. 
+					dt = new DataTable();
+				}
+			}
+			return dt;
+		}
+
+		// 03/11/2014 Paul.  This rule could be for EditView, DetailView or GridView, so we have to clear them all. 
+		public void ClearBusinessRules()
+		{
+			foreach(string sKey in GetCacheKeys())
+			{
+				if ( sKey.StartsWith("vwEDITVIEWS_RULES.") || sKey.StartsWith("vwDETAILVIEWS_RULES.") || sKey.StartsWith("vwGRIDVIEWS_RULES.") )
+					Cache.Remove(sKey);
+			}
+		}
+
+		// 05/10/2016 Paul.  The User Primary Role is used with role-based views. 
+		public DataTable GridViewRules(string sNAME, string sPRIMARY_ROLE_NAME)
+		{
+			DataTable dt = null;
+			// 10/1/2017 Paul.  Role-based view will not be applied with the ArchiveView. 
+			// 02/23/2018 Paul.  Allow roll-based view while in archive mode. 
+			if ( Sql.IsEmptyString(sPRIMARY_ROLE_NAME) )
+			{
+				dt = this.GridViewRules(sNAME);
+			}
+			else
+			{
+				dt = this.GridViewRules(sNAME + "." + sPRIMARY_ROLE_NAME);
+				if ( dt.Rows.Count == 0 )
+					dt = this.GridViewRules(sNAME);
+			}
+			return dt;
+		}
+
+		// 11/22/2010 Paul.  Apply Business Rules. 
+		public DataTable GridViewRules(string sNAME)
+		{
+			DataTable dt = Cache.Get("vwGRIDVIEWS_RULES." + sNAME) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select *                  " + ControlChars.CrLf
+						     + "  from vwGRIDVIEWS_RULES  " + ControlChars.CrLf
+						     + " where NAME = @NAME       " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							Sql.AddParameter(cmd, "@NAME", sNAME);
+							
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwGRIDVIEWS_RULES." + sNAME, dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 11/21/2005 Paul. Ignore error, but then we need to find a way to display the connection error. 
+					// The most likely failure here is a connection failure. 
+					dt = new DataTable();
+				}
+			}
+			return dt;
+		}
+
+		// 12/04/2010 Paul.  We need to cache the business rules separately so that they can be accessed by Reports. 
+		public void ClearReportRules(Guid gID)
+		{
+			Cache.Remove("vwBUSINESS_RULES." + gID.ToString());
+		}
+
+		public DataTable ReportRules(Guid gID)
+		{
+			DataTable dt = Cache.Get("vwREPORT_RULES." + gID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select MODULE_NAME " + ControlChars.CrLf
+						     + "     , XOML        " + ControlChars.CrLf
+						     + "  from vwRULES_Edit" + ControlChars.CrLf
+						     + " where ID = @ID    " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							Sql.AddParameter(cmd, "@ID", gID);
+							
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwREPORT_RULES." + gID.ToString(), dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -2357,8 +3704,8 @@ namespace SplendidCRM
 
 		public void ClearDetailView(string sDETAIL_NAME)
 		{
-			memoryCache.Remove("vwDETAILVIEWS_FIELDS." + sDETAIL_NAME);
-			memoryCache.Remove("vwDETAILVIEWS_RULES."  + sDETAIL_NAME);
+			Cache.Remove("vwDETAILVIEWS_FIELDS." + sDETAIL_NAME);
+			Cache.Remove("vwDETAILVIEWS_RULES."  + sDETAIL_NAME);
 		}
 
 		// 05/05/2016 Paul.  The User Primary Role is used with role-based views. 
@@ -2382,7 +3729,7 @@ namespace SplendidCRM
 
 		public DataTable DetailViewFields(string sDETAIL_NAME)
 		{
-			DataTable dt = memoryCache.Get("vwDETAILVIEWS_FIELDS." + sDETAIL_NAME) as DataTable;
+			DataTable dt = Cache.Get("vwDETAILVIEWS_FIELDS." + sDETAIL_NAME) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -2408,7 +3755,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwDETAILVIEWS_FIELDS." + sDETAIL_NAME, dt, DefaultCacheExpiration());
+								Cache.Set("vwDETAILVIEWS_FIELDS." + sDETAIL_NAME, dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -2446,7 +3793,7 @@ namespace SplendidCRM
 		// 11/10/2010 Paul.  Apply Business Rules. 
 		public DataTable DetailViewRules(string sNAME)
 		{
-			DataTable dt = memoryCache.Get("vwDETAILVIEWS_RULES." + sNAME) as DataTable;
+			DataTable dt = Cache.Get("vwDETAILVIEWS_RULES." + sNAME) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -2469,7 +3816,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwDETAILVIEWS_RULES." + sNAME, dt, DefaultCacheExpiration());
+								Cache.Set("vwDETAILVIEWS_RULES." + sNAME, dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -2487,7 +3834,7 @@ namespace SplendidCRM
 
 		public DataTable TabGroups()
 		{
-			DataTable dt = memoryCache.Get("vwTAB_GROUPS") as DataTable;
+			DataTable dt = Cache.Get("vwTAB_GROUPS") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -2513,7 +3860,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwTAB_GROUPS", dt, DefaultCacheExpiration());
+								Cache.Set("vwTAB_GROUPS", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -2531,7 +3878,7 @@ namespace SplendidCRM
 
 		public DataTable ModuleGroups()
 		{
-			DataTable dt = memoryCache.Get("vwMODULES_GROUPS") as DataTable;
+			DataTable dt = Cache.Get("vwMODULES_GROUPS") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -2557,7 +3904,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwMODULES_GROUPS", dt, DefaultCacheExpiration());
+								Cache.Set("vwMODULES_GROUPS", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -2575,7 +3922,7 @@ namespace SplendidCRM
 
 		public DataTable ModuleGroupsByUser()
 		{
-			DataTable dt = memoryCache.Get("vwMODULES_GROUPS_ByUser." + Security.USER_ID.ToString()) as DataTable;
+			DataTable dt = Cache.Get("vwMODULES_GROUPS_ByUser." + Security.USER_ID.ToString()) as DataTable;
 			if ( dt == null )
 			{
 				dt = new DataTable();
@@ -2615,7 +3962,7 @@ namespace SplendidCRM
 										}
 									}
 									dt.AcceptChanges();
-									memoryCache.Set("vwMODULES_GROUPS_ByUser." + Security.USER_ID.ToString(), dt, DefaultCacheExpiration());
+									Cache.Set("vwMODULES_GROUPS_ByUser." + Security.USER_ID.ToString(), dt, DefaultCacheExpiration());
 								}
 							}
 						}
@@ -2631,12 +3978,12 @@ namespace SplendidCRM
 
 		public void ClearDetailViewRelationships(string sDETAIL_NAME)
 		{
-			memoryCache.Remove("vwDETAILVIEWS_RELATIONSHIPS." + sDETAIL_NAME);
+			Cache.Remove("vwDETAILVIEWS_RELATIONSHIPS." + sDETAIL_NAME);
 		}
 
 		public DataTable DetailViewRelationships(string sDETAIL_NAME)
 		{
-			DataTable dt = memoryCache.Get("vwDETAILVIEWS_RELATIONSHIPS." + sDETAIL_NAME) as DataTable;
+			DataTable dt = Cache.Get("vwDETAILVIEWS_RELATIONSHIPS." + sDETAIL_NAME) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -2660,7 +4007,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwDETAILVIEWS_RELATIONSHIPS." + sDETAIL_NAME, dt, DefaultCacheExpiration());
+								Cache.Set("vwDETAILVIEWS_RELATIONSHIPS." + sDETAIL_NAME, dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -2680,14 +4027,14 @@ namespace SplendidCRM
 		public void ClearEditViewRelationships(string sEDIT_NAME)
 		{
 			// 04/27/2010 Paul.  There are two cached items that need to be cleared. 
-			memoryCache.Remove("vwEDITVIEWS_RELATIONSHIPS." + sEDIT_NAME + ".NewRecord"     );
-			memoryCache.Remove("vwEDITVIEWS_RELATIONSHIPS." + sEDIT_NAME + ".ExistingRecord");
+			Cache.Remove("vwEDITVIEWS_RELATIONSHIPS." + sEDIT_NAME + ".NewRecord"     );
+			Cache.Remove("vwEDITVIEWS_RELATIONSHIPS." + sEDIT_NAME + ".ExistingRecord");
 		}
 
 		// 04/19/20910 Paul.  Add separate table for EditView Relationships. 
 		public DataTable EditViewRelationships(string sEDIT_NAME, bool bNewRecord)
 		{
-			DataTable dt = memoryCache.Get("vwEDITVIEWS_RELATIONSHIPS." + sEDIT_NAME + (bNewRecord ? ".NewRecord" : ".ExistingRecord")) as DataTable;
+			DataTable dt = Cache.Get("vwEDITVIEWS_RELATIONSHIPS." + sEDIT_NAME + (bNewRecord ? ".NewRecord" : ".ExistingRecord")) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -2715,7 +4062,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwEDITVIEWS_RELATIONSHIPS." + sEDIT_NAME + (bNewRecord ? ".NewRecord" : ".ExistingRecord"), dt, DefaultCacheExpiration());
+								Cache.Set("vwEDITVIEWS_RELATIONSHIPS." + sEDIT_NAME + (bNewRecord ? ".NewRecord" : ".ExistingRecord"), dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -2739,7 +4086,7 @@ namespace SplendidCRM
 		// 07/10/2009 Paul.  We are now allowing relationships to be user-specific. 
 		public DataTable UserDashlets(string sDETAIL_NAME, Guid gUSER_ID)
 		{
-			DataTable dt = Session["vwDASHLETS_USERS." + sDETAIL_NAME] as DataTable;
+			DataTable dt = Session.GetTable("vwDASHLETS_USERS." + sDETAIL_NAME);
 			if ( dt == null )
 			{
 				try
@@ -2789,7 +4136,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								Session["vwDASHLETS_USERS." + sDETAIL_NAME] = dt;
+								Session.SetTable("vwDASHLETS_USERS." + sDETAIL_NAME, dt);
 							}
 						}
 					}
@@ -2808,9 +4155,9 @@ namespace SplendidCRM
 		public void ClearEditView(string sEDIT_NAME)
 		{
 			// 03/16/2012 Paul.  With the addition of the SearchView flag, we need to update the key to include the flag. 
-			memoryCache.Remove("vwEDITVIEWS_FIELDS." + sEDIT_NAME + ".True" );
-			memoryCache.Remove("vwEDITVIEWS_FIELDS." + sEDIT_NAME + ".False");
-			memoryCache.Remove("vwEDITVIEWS_RULES."  + sEDIT_NAME);
+			Cache.Remove("vwEDITVIEWS_FIELDS." + sEDIT_NAME + ".True" );
+			Cache.Remove("vwEDITVIEWS_FIELDS." + sEDIT_NAME + ".False");
+			Cache.Remove("vwEDITVIEWS_RULES."  + sEDIT_NAME);
 		}
 
 		// 10/13/2011 Paul.  Special list of EditViews for the search area with IS_MULTI_SELECT. 
@@ -2859,7 +4206,7 @@ namespace SplendidCRM
 
 		public DataTable EditViewFields(string sEDIT_NAME, bool bSearchView)
 		{
-			DataTable dt = memoryCache.Get("vwEDITVIEWS_FIELDS." + sEDIT_NAME + "." + bSearchView.ToString()) as DataTable;
+			DataTable dt = Cache.Get("vwEDITVIEWS_FIELDS." + sEDIT_NAME + "." + bSearchView.ToString()) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -2886,7 +4233,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwEDITVIEWS_FIELDS." + sEDIT_NAME + "." + bSearchView.ToString(), dt, DefaultCacheExpiration());
+								Cache.Set("vwEDITVIEWS_FIELDS." + sEDIT_NAME + "." + bSearchView.ToString(), dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -2905,7 +4252,7 @@ namespace SplendidCRM
 		// 06/29/2012 Paul.  Business Rules need to be cleared after saving. 
 		public void ClearEditViewRules(string sNAME)
 		{
-			memoryCache.Remove("vwEDITVIEWS_RULES." + sNAME);
+			Cache.Remove("vwEDITVIEWS_RULES." + sNAME);
 		}
 
 		// 05/10/2016 Paul.  The User Primary Role is used with role-based views. 
@@ -2930,7 +4277,7 @@ namespace SplendidCRM
 		// 11/10/2010 Paul.  Apply Business Rules. 
 		public DataTable EditViewRules(string sNAME)
 		{
-			DataTable dt = memoryCache.Get("vwEDITVIEWS_RULES." + sNAME) as DataTable;
+			DataTable dt = Cache.Get("vwEDITVIEWS_RULES." + sNAME) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -2953,7 +4300,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwEDITVIEWS_RULES." + sNAME, dt, DefaultCacheExpiration());
+								Cache.Set("vwEDITVIEWS_RULES." + sNAME, dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -2971,12 +4318,12 @@ namespace SplendidCRM
 
 		public void ClearDynamicButtons(string sVIEW_NAME)
 		{
-			memoryCache.Remove("vwDYNAMIC_BUTTONS." + sVIEW_NAME);
+			Cache.Remove("vwDYNAMIC_BUTTONS." + sVIEW_NAME);
 		}
 
 		public DataTable DynamicButtons(string sVIEW_NAME)
 		{
-			DataTable dt = memoryCache.Get("vwDYNAMIC_BUTTONS." + sVIEW_NAME) as DataTable;
+			DataTable dt = Cache.Get("vwDYNAMIC_BUTTONS." + sVIEW_NAME) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -3002,7 +4349,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwDYNAMIC_BUTTONS." + sVIEW_NAME, dt, DefaultCacheExpiration());
+								Cache.Set("vwDYNAMIC_BUTTONS." + sVIEW_NAME, dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -3020,7 +4367,7 @@ namespace SplendidCRM
 
 		public void ClearFieldsMetaData(string sMODULE_NAME)
 		{
-			memoryCache.Remove("vwFIELDS_META_DATA_Validated." + sMODULE_NAME);
+			Cache.Remove("vwFIELDS_META_DATA_Validated." + sMODULE_NAME);
 			ClearSearchColumns(sMODULE_NAME);
 		}
 
@@ -3028,7 +4375,7 @@ namespace SplendidCRM
 		// 08/30/2016 Paul.  The Business Process Engine needs to be able to get the list of custom fields in a background thread. 
 		public DataTable FieldsMetaData_Validated(string sTABLE_NAME)
 		{
-			DataTable dt = memoryCache.Get("vwFIELDS_META_DATA_Validated." + sTABLE_NAME) as DataTable;
+			DataTable dt = Cache.Get("vwFIELDS_META_DATA_Validated." + sTABLE_NAME) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -3052,7 +4399,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwFIELDS_META_DATA_Validated." + sTABLE_NAME, dt, DefaultCacheExpiration());
+								Cache.Set("vwFIELDS_META_DATA_Validated." + sTABLE_NAME, dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -3071,7 +4418,7 @@ namespace SplendidCRM
 		// 11/26/2009 Paul.  We need the actual table fields when sync'ing with the offline client. 
 		public DataTable SqlColumns(string sTABLE_NAME)
 		{
-			DataTable dt = memoryCache.Get("vwSqlColumns." + sTABLE_NAME) as DataTable;
+			DataTable dt = Cache.Get("vwSqlColumns." + sTABLE_NAME) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -3098,7 +4445,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwSqlColumns." + sTABLE_NAME, dt, DefaultCacheExpiration());
+								Cache.Set("vwSqlColumns." + sTABLE_NAME, dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -3117,7 +4464,7 @@ namespace SplendidCRM
 		// 05/15/2020 Paul.  The React Client needs to get the Edit fields for the EmailTemplates editor. 
 		public DataTable SqlColumns(string sMODULE_NAME, string sMODE)
 		{
-			DataTable dt = memoryCache.Get("vwSqlColumns." + sMODULE_NAME + "." + sMODE) as DataTable;
+			DataTable dt = Cache.Get("vwSqlColumns." + sMODULE_NAME + "." + sMODE) as DataTable;
 			if ( dt == null )
 			{
 				string sTABLE_NAME = CrmModules.TableName(sMODULE_NAME);
@@ -3158,7 +4505,7 @@ namespace SplendidCRM
 									((IDbDataAdapter)da).SelectCommand = cmd;
 									dt = new DataTable();
 									da.Fill(dt);
-									memoryCache.Set("vwSqlColumns." + sMODULE_NAME + "." + sMODE, dt, DefaultCacheExpiration());
+									Cache.Set("vwSqlColumns." + sMODULE_NAME + "." + sMODE, dt, DefaultCacheExpiration());
 								}
 							}
 						}
@@ -3179,7 +4526,7 @@ namespace SplendidCRM
 		// 05/25/2008 Paul.  There is no automated clearing of this cache entry. The admin must manually perform a Reload. 
 		public DataTable FieldsMetaData_UnvalidatedCustomFields(string sTABLE_NAME)
 		{
-			DataTable dt = memoryCache.Get("vwFIELDS_META_DATA_Unvalidated." + sTABLE_NAME) as DataTable;
+			DataTable dt = Cache.Get("vwFIELDS_META_DATA_Unvalidated." + sTABLE_NAME) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -3207,7 +4554,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwFIELDS_META_DATA_Unvalidated." + sTABLE_NAME, dt, DefaultCacheExpiration());
+								Cache.Set("vwFIELDS_META_DATA_Unvalidated." + sTABLE_NAME, dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -3218,6 +4565,43 @@ namespace SplendidCRM
 					// 11/21/2005 Paul. Ignore error, but then we need to find a way to display the connection error. 
 					// The most likely failure here is a connection failure. 
 					dt = new DataTable();
+				}
+			}
+			return dt;
+		}
+
+		public DataTable ForumTopics()
+		{
+			DataTable dt = Cache.Get("vwFORUM_TOPICS_LISTBOX") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select NAME                    " + ControlChars.CrLf
+						     + "  from vwFORUM_TOPICS_LISTBOX  " + ControlChars.CrLf
+						     + " order by LIST_ORDER           " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwFORUM_TOPICS_LISTBOX", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
 				}
 			}
 			return dt;
@@ -3363,12 +4747,12 @@ namespace SplendidCRM
 
 		public void ClearSearchColumns(string sVIEW_NAME)
 		{
-			memoryCache.Remove("vwSqlColumns_Searching." + sVIEW_NAME);
+			Cache.Remove("vwSqlColumns_Searching." + sVIEW_NAME);
 		}
 
 		public DataTable SearchColumns(string sVIEW_NAME)
 		{
-			DataTable dt = memoryCache.Get("vwSqlColumns_Searching." + sVIEW_NAME) as DataTable;
+			DataTable dt = Cache.Get("vwSqlColumns_Searching." + sVIEW_NAME) as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -3402,7 +4786,7 @@ namespace SplendidCRM
 								dt = new DataTable();
 								da.Fill(dt);
 								// 06/10/2006 Paul.  The default sliding scale is not appropriate as columns can be added. 
-								memoryCache.Set("vwSqlColumns_Searching." + sVIEW_NAME, dt, DefaultCacheExpiration());
+								Cache.Set("vwSqlColumns_Searching." + sVIEW_NAME, dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -3419,7 +4803,7 @@ namespace SplendidCRM
 		{
 			// 08/09/2020 Paul.  Convert to comma separated string. 
 			string sModuleList = String.Join(",", lstMODULES.ToArray());
-			Dictionary<string, object> objs = memoryCache.Get("vwMODULES.Columns.ReactClient." + sModuleList) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwMODULES.Columns.ReactClient." + sModuleList) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -3456,7 +4840,7 @@ namespace SplendidCRM
 								objs[sMODULE_NAME] = arrModuleColumns;
 							}
 						}
-						memoryCache.Set("vwMODULES.Columns.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
+						Cache.Set("vwMODULES.Columns.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
 					}
 				}
 				catch(Exception ex)
@@ -3468,6 +4852,132 @@ namespace SplendidCRM
 			return objs;
 		}
 
+		public void ClearEmailGroups()
+		{
+			Cache.Remove("vwUSERS_Groups");
+		}
+
+		public DataTable EmailGroups()
+		{
+			DataTable dt = Cache.Get("vwUSERS_Groups") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select *             " + ControlChars.CrLf
+						     + "  from vwUSERS_Groups" + ControlChars.CrLf
+						     + " order by NAME       " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwUSERS_Groups", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		public void ClearInboundEmails()
+		{
+			Cache.Remove("vwINBOUND_EMAILS_Bounce");
+			Cache.Remove("vwINBOUND_EMAILS_Monitored");
+		}
+
+
+		// 02/16/2008 Paul.  InboundEmailBounce needs to be called from the scheduler, so the application must be provided. 
+		// 10/27/2008 Paul.  Pass the context instead of the Application so that more information will be available to the error handling. 
+		public DataTable InboundEmailBounce()
+		{
+			// 02/16/2008 Paul.  When called from the scheduler, the context is not available, so get the cache from HttpRuntime. 
+			DataTable dt = Cache.Get("vwINBOUND_EMAILS_Bounce") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select *                      " + ControlChars.CrLf
+						     + "  from vwINBOUND_EMAILS_Bounce" + ControlChars.CrLf
+						     + " order by NAME                " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwINBOUND_EMAILS_Bounce", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 02/16/2008 Paul.  InboundEmailMonitored needs to be called from the scheduler, so the application must be provided. 
+		// 10/27/2008 Paul.  Pass the context instead of the Application so that more information will be available to the error handling. 
+		public DataTable InboundEmailMonitored()
+		{
+			// 02/16/2008 Paul.  When called from the scheduler, the context is not available, so get the cache from HttpRuntime. 
+			DataTable dt = Cache.Get("vwINBOUND_EMAILS_Monitored") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select *                       " + ControlChars.CrLf
+						     + "  from vwINBOUND_EMAILS_Monitored" + ControlChars.CrLf
+						     + " order by NAME                 " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwINBOUND_EMAILS_Monitored", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
 		// 11/18/2008 Paul.  Teams can be used in the search panels. 
 		public DataTable Teams()
 		{
@@ -3475,7 +4985,7 @@ namespace SplendidCRM
 			// 11/25/2006 Paul.  An admin can see all teams, but most users will only see the teams which they are assigned to. 
 			if ( Security.IS_ADMIN )
 			{
-				dt = memoryCache.Get("vwTEAMS") as DataTable;
+				dt = Cache.Get("vwTEAMS") as DataTable;
 				if ( dt == null )
 				{
 					try
@@ -3497,7 +5007,7 @@ namespace SplendidCRM
 									((IDbDataAdapter)da).SelectCommand = cmd;
 									dt = new DataTable();
 									da.Fill(dt);
-									memoryCache.Set("vwTEAMS", dt, DefaultCacheExpiration());
+									Cache.Set("vwTEAMS", dt, DefaultCacheExpiration());
 								}
 							}
 						}
@@ -3651,9 +5161,48 @@ namespace SplendidCRM
 			return lstTeams;
 		}
 
+		// 05/12/2016 Paul.  Tags can be used in the search panels. 
+		public DataTable Tags()
+		{
+			DataTable dt = null;
+			dt = Cache.Get("vwTAGS") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select ID     " + ControlChars.CrLf
+						     + "     , NAME   " + ControlChars.CrLf
+						     + "  from vwTAGS " + ControlChars.CrLf
+						     + " order by NAME" + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwTAGS", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
 		public DataTable ACLFieldAliases()
 		{
-			DataTable dt = memoryCache.Get("vwACL_FIELDS_ALIASES") as DataTable;
+			DataTable dt = Cache.Get("vwACL_FIELDS_ALIASES") as DataTable;
 			if ( dt == null )
 			{
 				try
@@ -3674,7 +5223,7 @@ namespace SplendidCRM
 								((IDbDataAdapter)da).SelectCommand = cmd;
 								dt = new DataTable();
 								da.Fill(dt);
-								memoryCache.Set("vwACL_FIELDS_ALIASES", dt, DefaultCacheExpiration());
+								Cache.Set("vwACL_FIELDS_ALIASES", dt, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -3682,6 +5231,1488 @@ namespace SplendidCRM
 				catch(Exception ex)
 				{
 					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		public void ClearReport(Guid gID)
+		{
+			string sID = gID.ToString();
+			//Cache.Remove("vwREPORTS." + sID);
+			//Cache.Remove("vwREPORTS.Parameters." + sID);
+			//Cache.Remove("vwREPORTS.Parameters.EditView." + sID);
+			foreach(string sKey in GetCacheKeys())
+			{
+				// 05/03/2011 Paul.  We need to include the USER_ID because we cache the Assigned User ID and the Team ID. 
+				if ( sKey.StartsWith("vwREPORTS.") && sKey.Contains(sID) )
+					Cache.Remove(sKey);
+			}
+		}
+
+		// 05/03/2011 Paul.  We need to include the USER_ID because we cache the Assigned User ID and the Team ID. 
+		public DataTable ReportParametersEditView(Guid gID, Guid gUSER_ID)
+		{
+			DataTable dt = Cache.Get("vwREPORTS.Parameters.EditView." + gID.ToString() + "." + gUSER_ID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				dt.Columns.Add("EDIT_NAME"                   , typeof(String ) );
+				dt.Columns.Add("FIELD_INDEX"                 , typeof(Int32  ) );
+				dt.Columns.Add("FIELD_TYPE"                  , typeof(String ) );
+				dt.Columns.Add("DATA_LABEL"                  , typeof(String ) );
+				dt.Columns.Add("DATA_FIELD"                  , typeof(String ) );
+				dt.Columns.Add("DATA_FORMAT"                 , typeof(String ) );
+				dt.Columns.Add("DISPLAY_FIELD"               , typeof(String ) );
+				dt.Columns.Add("CACHE_NAME"                  , typeof(String ) );
+				dt.Columns.Add("DATA_REQUIRED"               , typeof(Boolean) );
+				dt.Columns.Add("UI_REQUIRED"                 , typeof(Boolean) );
+				dt.Columns.Add("ONCLICK_SCRIPT"              , typeof(String ) );
+				dt.Columns.Add("FORMAT_SCRIPT"               , typeof(String ) );
+				dt.Columns.Add("FORMAT_TAB_INDEX"            , typeof(Int16  ) );
+				dt.Columns.Add("FORMAT_MAX_LENGTH"           , typeof(Int32  ) );
+				dt.Columns.Add("FORMAT_SIZE"                 , typeof(Int32  ) );
+				dt.Columns.Add("FORMAT_ROWS"                 , typeof(Int32  ) );
+				dt.Columns.Add("FORMAT_COLUMNS"              , typeof(Int32  ) );
+				dt.Columns.Add("COLSPAN"                     , typeof(Int32  ) );
+				dt.Columns.Add("ROWSPAN"                     , typeof(Int32  ) );
+				dt.Columns.Add("LABEL_WIDTH"                 , typeof(String ) );
+				dt.Columns.Add("FIELD_WIDTH"                 , typeof(String ) );
+				dt.Columns.Add("DATA_COLUMNS"                , typeof(Int32  ) );
+				dt.Columns.Add("MODULE_TYPE"                 , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_MODULE_NAME"  , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_VIEW_NAME"    , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_ID_FIELD"     , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_NAME_FIELD"   , typeof(String ) );
+				dt.Columns.Add("RELATED_VIEW_NAME"           , typeof(String ) );
+				dt.Columns.Add("RELATED_ID_FIELD"            , typeof(String ) );
+				dt.Columns.Add("RELATED_NAME_FIELD"          , typeof(String ) );
+				dt.Columns.Add("RELATED_JOIN_FIELD"          , typeof(String ) );
+				dt.Columns.Add("PARENT_FIELD"                , typeof(String ) );
+				dt.Columns.Add("FIELD_VALIDATOR_MESSAGE"     , typeof(String ) );
+				dt.Columns.Add("VALIDATION_TYPE"             , typeof(String ) );
+				dt.Columns.Add("REGULAR_EXPRESSION"          , typeof(String ) );
+				dt.Columns.Add("DATA_TYPE"                   , typeof(String ) );
+				dt.Columns.Add("MININUM_VALUE"               , typeof(String ) );
+				dt.Columns.Add("MAXIMUM_VALUE"               , typeof(String ) );
+				dt.Columns.Add("COMPARE_OPERATOR"            , typeof(String ) );
+				dt.Columns.Add("TOOL_TIP"                    , typeof(String ) );
+				
+				try
+				{
+					// 01/15/2013 Paul.  A customer wants to be able to change the assigned user as this was previously allowed in report prompts. 
+					bool bShowAssignedUser = false;
+						bShowAssignedUser = Sql.ToBoolean(Application["CONFIG.Reports.ShowAssignedUser"]);
+					// 05/03/2011 Paul.  We need to include the USER_ID because we cache the Assigned User ID and the Team ID. 
+					DataTable dtReportParameters = this.ReportParameters(gID, gUSER_ID);
+					if ( dtReportParameters != null && dtReportParameters.Rows.Count > 0 )
+					{
+						string sMODULE_NAME = Sql.ToString(dtReportParameters.Rows[0]["MODULE_NAME"]);
+						DataTable dtEditView = this.EditViewFields(sMODULE_NAME + ".EditView");
+						foreach ( DataRow rowParameter in dtReportParameters.Rows )
+						{
+							// 03/09/2012 Paul.  Making the data field upper case will simplify tests later. 
+							string sDATA_FIELD    = Sql.ToString(rowParameter["NAME"         ]).ToUpper();
+							string sDATA_LABEL    = Sql.ToString(rowParameter["PROMPT"       ]);
+							string sDATA_TYPE     = Sql.ToString(rowParameter["DATA_TYPE"    ]);
+							string sDEFAULT_VALUE = Sql.ToString(rowParameter["DEFAULT_VALUE"]);
+							bool   bHIDDEN        = Sql.ToBoolean(rowParameter["HIDDEN"      ]);
+							// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+							string sDATA_SET_NAME = Sql.ToString (rowParameter["DATA_SET_NAME"]);
+							bool   bMULTI_VALUE   = Sql.ToBoolean(rowParameter["MULTI_VALUE"  ]);
+							bool bFieldFound = false;
+							// 04/09/2011 Paul.  ID is not allowed as a parameter because it is used by the Report ID in the Dashlet. 
+							// 02/03/2012 Paul.  Add support for the Hidden flag. 
+							if ( sDATA_FIELD == "ID" || bHIDDEN )
+								continue;
+							foreach ( DataRow rowEditView in dtEditView.Rows )
+							{
+								// 03/09/2012 Paul.  ASSIGNED_USER_ID is a special parameter that is not a prompt. 
+								if ( sDATA_FIELD == Sql.ToString(rowEditView["DATA_FIELD"]) && sDATA_FIELD != "ASSIGNED_USER_ID" && sDATA_FIELD != "TEAM_ID" )
+								{
+									bFieldFound = true;
+									DataRow row = dt.NewRow();
+									dt.Rows.Add(row);
+									// 07/29/2012 Paul.  Since we are searching, we should follow SearchView rules as we don't want field level security to prevent editing. 
+									row["EDIT_NAME"                 ] = sMODULE_NAME + ".SearchView";
+									row["FIELD_INDEX"               ] = dt.Rows.Count;
+									row["FIELD_TYPE"                ] = rowEditView["FIELD_TYPE"                ];
+									// 03/04/2012 Paul.  Custom label was being applied to field, not label. 
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : Sql.ToString(rowEditView["DATA_LABEL"]);
+									row["DATA_FIELD"                ] = rowEditView["DATA_FIELD"                ];
+									row["DATA_FORMAT"               ] = rowEditView["DATA_FORMAT"               ];
+									row["DISPLAY_FIELD"             ] = rowEditView["DISPLAY_FIELD"             ];
+									row["CACHE_NAME"                ] = rowEditView["CACHE_NAME"                ];
+									row["DATA_REQUIRED"             ] = rowEditView["DATA_REQUIRED"             ];
+									row["UI_REQUIRED"               ] = rowEditView["UI_REQUIRED"               ];
+									row["ONCLICK_SCRIPT"            ] = rowEditView["ONCLICK_SCRIPT"            ];
+									row["FORMAT_SCRIPT"             ] = rowEditView["FORMAT_SCRIPT"             ];
+									row["FORMAT_TAB_INDEX"          ] = rowEditView["FORMAT_TAB_INDEX"          ];
+									row["FORMAT_MAX_LENGTH"         ] = rowEditView["FORMAT_MAX_LENGTH"         ];
+									row["FORMAT_SIZE"               ] = rowEditView["FORMAT_SIZE"               ];
+									row["FORMAT_ROWS"               ] = rowEditView["FORMAT_ROWS"               ];
+									row["FORMAT_COLUMNS"            ] = rowEditView["FORMAT_COLUMNS"            ];
+									//row["COLSPAN"                   ] = rowEditView["COLSPAN"                   ];
+									//row["ROWSPAN"                   ] = rowEditView["ROWSPAN"                   ];
+									row["LABEL_WIDTH"               ] = rowEditView["LABEL_WIDTH"               ];
+									row["FIELD_WIDTH"               ] = rowEditView["FIELD_WIDTH"               ];
+									row["DATA_COLUMNS"              ] = rowEditView["DATA_COLUMNS"              ];
+									row["MODULE_TYPE"               ] = rowEditView["MODULE_TYPE"               ];
+									//row["RELATED_SOURCE_MODULE_NAME"] = rowEditView["RELATED_SOURCE_MODULE_NAME"];
+									//row["RELATED_SOURCE_VIEW_NAME"  ] = rowEditView["RELATED_SOURCE_VIEW_NAME"  ];
+									//row["RELATED_SOURCE_ID_FIELD"   ] = rowEditView["RELATED_SOURCE_ID_FIELD"   ];
+									//row["RELATED_SOURCE_NAME_FIELD" ] = rowEditView["RELATED_SOURCE_NAME_FIELD" ];
+									//row["RELATED_VIEW_NAME"         ] = rowEditView["RELATED_VIEW_NAME"         ];
+									//row["RELATED_ID_FIELD"          ] = rowEditView["RELATED_ID_FIELD"          ];
+									//row["RELATED_NAME_FIELD"        ] = rowEditView["RELATED_NAME_FIELD"        ];
+									//row["RELATED_JOIN_FIELD"        ] = rowEditView["RELATED_JOIN_FIELD"        ];
+									//row["PARENT_FIELD"              ] = rowEditView["PARENT_FIELD"              ];
+									row["FIELD_VALIDATOR_MESSAGE"   ] = rowEditView["FIELD_VALIDATOR_MESSAGE"   ];
+									row["VALIDATION_TYPE"           ] = rowEditView["VALIDATION_TYPE"           ];
+									row["REGULAR_EXPRESSION"        ] = rowEditView["REGULAR_EXPRESSION"        ];
+									row["DATA_TYPE"                 ] = rowEditView["DATA_TYPE"                 ];
+									row["MININUM_VALUE"             ] = rowEditView["MININUM_VALUE"             ];
+									row["MAXIMUM_VALUE"             ] = rowEditView["MAXIMUM_VALUE"             ];
+									row["COMPARE_OPERATOR"          ] = rowEditView["COMPARE_OPERATOR"          ];
+									row["TOOL_TIP"                  ] = rowEditView["TOOL_TIP"                  ];
+									// 03/04/2012 Paul.  Apply MultiValue flag if set in the report. 
+									if ( Sql.ToString(row["FIELD_TYPE"]) == "ListBox" && bMULTI_VALUE )
+										row["FORMAT_ROWS"] = 4;
+									// 03/24/2018 Paul.  It does not make sense to use the mandatory field flag on an report serach. 
+									row["UI_REQUIRED"] = false;
+									// 04/28/2018 Paul.  We need to make sure to treat data sets as a list. 
+									if ( !Sql.IsEmptyString(sDATA_SET_NAME) )
+									{
+										row["FIELD_TYPE"                ] = "ListBox";
+										row["CACHE_NAME"                ] = sDATA_SET_NAME;
+										row["MODULE_TYPE"               ] = DBNull.Value;
+										if ( bMULTI_VALUE )
+											row["FORMAT_ROWS"] = 4;
+									}
+									break;
+								}
+							}
+							// 03/09/2012 Paul.  ASSIGNED_USER_ID is a special parameter that is not a prompt. 
+							// 01/15/2013 Paul.  A customer wants to be able to change the assigned user as this was previously allowed in report prompts. 
+							if ( !bFieldFound && (bShowAssignedUser || (sDATA_FIELD != "ASSIGNED_USER_ID" && sDATA_FIELD != "TEAM_ID")) )
+							{
+								DataRow row = dt.NewRow();
+								dt.Rows.Add(row);
+								// 07/29/2012 Paul.  Since we are searching, we should follow SearchView rules as we don't want field level security to prevent editing. 
+								row["EDIT_NAME"                 ] = sMODULE_NAME + ".SearchView";
+								row["FIELD_INDEX"               ] = dt.Rows.Count;
+								// 03/06/2012 Paul.  A report parameter can have a special Date Rule field. 
+								if ( sDATA_FIELD == "DATE_RULE" )
+								{
+									row["FIELD_TYPE"                ] = "ListBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									row["CACHE_NAME"                ] = "date_rule_dom";
+								}
+								// 11/15/2011 Paul.  If the value starts with a equals, then this is a formula and should not be treated as a date control. 
+								// 02/16/2018 Paul.  After calculating the value, also update the UI as it looks ugly to have formula in the field. 
+								else if ( sDEFAULT_VALUE.StartsWith("=") && !(sDATA_TYPE == "DateTime" || sDATA_FIELD.StartsWith("DATE_") || sDATA_FIELD.EndsWith("_DATE") || sDATA_FIELD.Contains("_DATE_") || sDATA_FIELD.StartsWith("DATETIME_") || sDATA_FIELD.EndsWith("_DATETIME") || sDATA_FIELD.Contains("_DATETIME_")) )
+								{
+									row["FIELD_TYPE"                ] = "TextBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+								}
+								// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+								// 04/28/2018 Paul.  Data Set has higher priority than _ID type. 
+								else if ( !Sql.IsEmptyString(sDATA_SET_NAME) )
+								{
+									row["FIELD_TYPE"                ] = "ListBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									row["CACHE_NAME"                ] = sDATA_SET_NAME;
+									if ( bMULTI_VALUE )
+										row["FORMAT_ROWS"] = 4;
+								}
+								else if ( sDATA_FIELD.EndsWith("_ID") )
+								{
+									// 01/15/2013 Paul.  If the field ends in ID, then the module name must be determined from the field. 
+									string sPOPUP_TABLE_NAME = sDATA_FIELD.Substring(0, sDATA_FIELD.Length - 3);
+									if ( sDATA_FIELD == "ASSIGNED_USER_ID" )
+										sPOPUP_TABLE_NAME = "USERS";
+									else if ( sPOPUP_TABLE_NAME.EndsWith("Y") )
+										sPOPUP_TABLE_NAME = sDATA_FIELD.Substring(0, sDATA_FIELD.Length - 4) + "IES";
+									else if ( sPOPUP_TABLE_NAME != "PROJECT" && sPOPUP_TABLE_NAME != "PROJECT_TASK" )
+										sPOPUP_TABLE_NAME += "S";
+									string sPOPUP_MODULE_NAME = CrmModules.ModuleName(sPOPUP_TABLE_NAME);
+									row["FIELD_TYPE"                ] = "ModulePopup";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sPOPUP_MODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									row["MODULE_TYPE"               ] = sPOPUP_MODULE_NAME;
+									row["DISPLAY_FIELD"             ] = sDATA_FIELD.Substring(0, sDATA_FIELD.Length - 2) + "NAME";
+									// 04/09/2011 Paul.  Auto-submit the selection. 
+									// Auto-submit is not working because we need to hit the actual submit button in order to get parameter processing. 
+									//row["DATA_FORMAT"               ] = "1";
+								}
+								else if ( sDATA_FIELD.StartsWith("DATETIME_") || sDATA_FIELD.EndsWith("_DATETIME") || sDATA_FIELD.Contains("_DATETIME_") )
+								{
+									row["FIELD_TYPE"                ] = "DateTimePicker";
+									// 04/11/2016 Paul.  Use BuildTermName. 
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : Utils.BuildTermName(sMODULE_NAME, sDATA_FIELD);
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									// 02/16/2018 Paul.  Special support for between clause as a parameter. Needed to be separated into 2 report parameters. 
+									if ( bMULTI_VALUE )
+									{
+										DataRow row2 = dt.NewRow();
+										dt.Rows.Add(row2);
+										for ( int i = 0; i < dt.Columns.Count; i++ )
+										{
+											row2[i] = row[i];
+										}
+										row ["DATA_FIELD"] = sDATA_FIELD + "_AFTER" ;
+										row2["DATA_FIELD"] = sDATA_FIELD + "_BEFORE";
+										if ( Session != null )
+										{
+											row ["DATA_LABEL"] =  L10n.Term(Utils.BuildTermName(sMODULE_NAME, sDATA_FIELD)) + " " + L10n.Term("SavedSearch.LBL_SEARCH_AFTER" );
+											row2["DATA_LABEL"] =  L10n.Term(Utils.BuildTermName(sMODULE_NAME, sDATA_FIELD)) + " " + L10n.Term("SavedSearch.LBL_SEARCH_BEFORE");
+										}
+									}
+								}
+								else if ( sDATA_TYPE == "DateTime" || sDATA_FIELD.StartsWith("DATE_") || sDATA_FIELD.EndsWith("_DATE") || sDATA_FIELD.Contains("_DATE_") )
+								{
+									row["FIELD_TYPE"                ] = "DatePicker";
+									// 04/11/2016 Paul.  Use BuildTermName. 
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : Utils.BuildTermName(sMODULE_NAME, sDATA_FIELD);
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									// 04/11/2016 Paul.  Special support for between clause as a parameter. Needed to be separated into 2 report parameters. 
+									if ( bMULTI_VALUE )
+									{
+										DataRow row2 = dt.NewRow();
+										dt.Rows.Add(row2);
+										for ( int i = 0; i < dt.Columns.Count; i++ )
+										{
+											row2[i] = row[i];
+										}
+										row ["DATA_FIELD"] = sDATA_FIELD + "_AFTER" ;
+										row2["DATA_FIELD"] = sDATA_FIELD + "_BEFORE";
+										if ( Session != null )
+										{
+											row ["DATA_LABEL"] =  L10n.Term(Utils.BuildTermName(sMODULE_NAME, sDATA_FIELD)) + " " + L10n.Term("SavedSearch.LBL_SEARCH_AFTER" );
+											row2["DATA_LABEL"] =  L10n.Term(Utils.BuildTermName(sMODULE_NAME, sDATA_FIELD)) + " " + L10n.Term("SavedSearch.LBL_SEARCH_BEFORE");
+										}
+									}
+								}
+								// 03/06/2012 Paul.  A report parameter can include an Assigned To list. 
+								else if ( sDATA_FIELD == "ASSIGNED_TO" )
+								{
+									row["FIELD_TYPE"                ] = "ListBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									row["CACHE_NAME"                ] = "AssignedTo";
+									if ( bMULTI_VALUE )
+										row["FORMAT_ROWS"] = 4;
+								}
+								else
+								{
+									row["FIELD_TYPE"                ] = "TextBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+								}
+								//row["DATA_FORMAT"               ] = rowEditView["DATA_FORMAT"               ];
+								//row["DISPLAY_FIELD"             ] = rowEditView["DISPLAY_FIELD"             ];
+								//row["CACHE_NAME"                ] = rowEditView["CACHE_NAME"                ];
+								//row["DATA_REQUIRED"             ] = rowEditView["DATA_REQUIRED"             ];
+								//row["UI_REQUIRED"               ] = rowEditView["UI_REQUIRED"               ];
+								//row["ONCLICK_SCRIPT"            ] = rowEditView["ONCLICK_SCRIPT"            ];
+								//row["FORMAT_SCRIPT"             ] = rowEditView["FORMAT_SCRIPT"             ];
+								//row["FORMAT_TAB_INDEX"          ] = rowEditView["FORMAT_TAB_INDEX"          ];
+								//row["FORMAT_MAX_LENGTH"         ] = rowEditView["FORMAT_MAX_LENGTH"         ];
+								//row["FORMAT_SIZE"               ] = rowEditView["FORMAT_SIZE"               ];
+								//row["FORMAT_ROWS"               ] = rowEditView["FORMAT_ROWS"               ];
+								//row["FORMAT_COLUMNS"            ] = rowEditView["FORMAT_COLUMNS"            ];
+								//row["COLSPAN"                   ] = rowEditView["COLSPAN"                   ];
+								//row["ROWSPAN"                   ] = rowEditView["ROWSPAN"                   ];
+								//row["LABEL_WIDTH"               ] = rowEditView["LABEL_WIDTH"               ];
+								//row["FIELD_WIDTH"               ] = rowEditView["FIELD_WIDTH"               ];
+								//row["DATA_COLUMNS"              ] = rowEditView["DATA_COLUMNS"              ];
+								//row["MODULE_TYPE"               ] = rowEditView["MODULE_TYPE"               ];
+							}
+						}
+					}
+					Cache.Set("vwREPORTS.Parameters.EditView." + gID.ToString() + "." + gUSER_ID.ToString(), dt, DefaultCacheExpiration());
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 05/03/2011 Paul.  We need to include the USER_ID because we cache the Assigned User ID and the Team ID. 
+		public DataTable ReportParameters(Guid gID, Guid gUSER_ID)
+		{
+			DataTable dt = Cache.Get("vwREPORTS.Parameters." + gID.ToString() + "." + gUSER_ID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				dt.Columns.Add("NAME"         , typeof(String));
+				dt.Columns.Add("MODULE_NAME"  , typeof(String));
+				dt.Columns.Add("DATA_TYPE"    , typeof(String));  // String, Boolean, DateTime, Integer, Float
+				dt.Columns.Add("NULLABLE"     , typeof(bool  ));
+				dt.Columns.Add("ALLOW_BLANK"  , typeof(bool  ));
+				dt.Columns.Add("MULTI_VALUE"  , typeof(bool  ));
+				// 02/03/2012 Paul.  Add support for the Hidden flag. 
+				dt.Columns.Add("HIDDEN"       , typeof(bool  ));
+				dt.Columns.Add("PROMPT"       , typeof(String));
+				dt.Columns.Add("DEFAULT_VALUE", typeof(String));
+				// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+				dt.Columns.Add("DATA_SET_NAME"   , typeof(String));
+				
+				try
+				{
+					DataTable dtReport = this.Report(gID);
+					if ( dtReport.Rows.Count > 0 )
+					{
+						DataRow rdr = dtReport.Rows[0];
+						string sRDL         = Sql.ToString(rdr["RDL"        ]);
+						string sMODULE_NAME = Sql.ToString(rdr["MODULE_NAME"]);
+						
+						RdlDocument rdl = new RdlDocument(hostingEnvironment, Session, Security, this, XmlUtil);
+						rdl.LoadRdl(sRDL);
+						rdl.NamespaceManager.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+						
+						// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+						string sReportID = rdl.SelectNodeValue("rd:ReportID");
+						XmlNodeList nlReportParameters = rdl.SelectNodesNS("ReportParameters/ReportParameter");
+						foreach ( XmlNode xReportParameter in nlReportParameters )
+						{
+							DataRow row = dt.NewRow();
+							dt.Rows.Add(row);
+							// 11/15/2011 Paul.  Must use rdl.SelectNodeValue to get the properties. 
+							string sName         = XmlUtil.GetNamedItem    (xReportParameter, "Name"    );
+							string sDataType     = rdl.SelectNodeValue(xReportParameter, "DataType");
+							bool   bNullable     = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "Nullable"  ));
+							bool   bAllowBlank   = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "AllowBlank"));
+							bool   bMultiValue   = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "MultiValue"));
+							// 02/03/2012 Paul.  Add support for the Hidden flag. 
+							bool   bHidden       = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "Hidden"    ));
+							string sPrompt       = rdl.SelectNodeValue(xReportParameter, "Prompt"  );
+							// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+							string sDataSetName    = rdl.SelectNodeValue(xReportParameter, "ValidValues/DataSetReference/DataSetName");
+							string sDefaultValue   = rdl.SelectNodeValue(xReportParameter, "DefaultValue/Values/Value");
+							// 02/16/2012 Paul.  Add support for specific parameter values. 
+							XmlNodeList nlValidValues = rdl.SelectNodesNS(xReportParameter, "ValidValues/ParameterValues/ParameterValue");
+							if ( nlValidValues.Count > 0 )
+							{
+								DataTable dtValidValues = new DataTable();
+								dtValidValues.Columns.Add("VALUE", typeof(String));
+								dtValidValues.Columns.Add("NAME" , typeof(String));
+								foreach ( XmlNode xValidValue in nlValidValues )
+								{
+									DataRow rowValid = dtValidValues.NewRow();
+									rowValid["VALUE"] = rdl.SelectNodeValue(xValidValue, "Value");
+									rowValid["NAME" ] = rdl.SelectNodeValue(xValidValue, "Label");
+									dtValidValues.Rows.Add(rowValid);
+								}
+								this.AddReportSource(sReportID + "." + sName + ".SpecificValues", "VALUE", "NAME", dtValidValues);
+								row["DATA_SET_NAME"] = sReportID + "." + sName + ".SpecificValues";
+							}
+							// 03/04/2012 Paul.  Collection of values. 
+							XmlNodeList nlDefaultValues = rdl.SelectNodesNS(xReportParameter, "DefaultValue/Values/Value");
+							if ( nlDefaultValues.Count > 0 )
+							{
+								if ( bMultiValue )
+								{
+									XmlDocument xml = new XmlDocument();
+									xml.AppendChild(xml.CreateXmlDeclaration("1.0", "UTF-8", null));
+									xml.AppendChild(xml.CreateElement("Values"));
+									foreach ( XmlNode xDefaultValue in nlDefaultValues )
+									{
+										XmlNode xValue = xml.CreateElement("Value");
+										xml.DocumentElement.AppendChild(xValue);
+										// 10/05/2012 Paul.  Check default value for null, not new value. 
+										bool bNull = Sql.ToBoolean(XmlUtil.GetNamedItem(xDefaultValue, "xsi:nil"));
+										if ( !bNull )
+											xValue.InnerText = xDefaultValue.InnerText;
+									}
+									row["DEFAULT_VALUE"] = xml.OuterXml;
+								}
+								else
+								{
+									// <Value xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true" />
+									XmlNode xDefaultValue = nlDefaultValues[0];
+									bool bNull = Sql.ToBoolean(XmlUtil.GetNamedItem(xDefaultValue, "xsi:nil"));
+									if ( !bNull )
+										row["DEFAULT_VALUE"] = Sql.ToString(xDefaultValue.InnerText);
+								}
+							}
+							
+							row["NAME"       ] = sName       ;
+							row["MODULE_NAME"] = sMODULE_NAME;
+							row["DATA_TYPE"  ] = sDataType   ;
+							row["NULLABLE"   ] = bNullable   ;
+							row["ALLOW_BLANK"] = bAllowBlank ;
+							row["MULTI_VALUE"] = bMultiValue ;
+							// 02/03/2012 Paul.  Add support for the Hidden flag. 
+							row["HIDDEN"     ] = bHidden     ;
+							row["PROMPT"     ] = sPrompt     ;
+							// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+							if ( !Sql.IsEmptyString(sDataSetName) )
+								row["DATA_SET_NAME"] = sReportID + "." + sDataSetName;
+							if ( String.Compare(sName, "ASSIGNED_USER_ID", true) == 0 )
+							{
+								row["DEFAULT_VALUE"] = Security.USER_ID.ToString();
+							}
+							else if ( String.Compare(sName, "TEAM_ID", true) == 0 )
+							{
+								row["DEFAULT_VALUE"] = Security.TEAM_ID.ToString();
+							}
+						}
+					}
+					Cache.Set("vwREPORTS.Parameters." + gID.ToString() + "." + gUSER_ID.ToString(), dt, DefaultCacheExpiration());
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 08/11/2014 Paul.  We need a similar method to get report parameters from an unsaved report. 
+		public DataTable ReportParametersEditView(string sMODULE_NAME, string sRDL)
+		{
+			DataTable dt = null;
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				dt.Columns.Add("EDIT_NAME"                   , typeof(String ) );
+				dt.Columns.Add("FIELD_INDEX"                 , typeof(Int32  ) );
+				dt.Columns.Add("FIELD_TYPE"                  , typeof(String ) );
+				dt.Columns.Add("DATA_LABEL"                  , typeof(String ) );
+				dt.Columns.Add("DATA_FIELD"                  , typeof(String ) );
+				dt.Columns.Add("DATA_FORMAT"                 , typeof(String ) );
+				dt.Columns.Add("DISPLAY_FIELD"               , typeof(String ) );
+				dt.Columns.Add("CACHE_NAME"                  , typeof(String ) );
+				dt.Columns.Add("DATA_REQUIRED"               , typeof(Boolean) );
+				dt.Columns.Add("UI_REQUIRED"                 , typeof(Boolean) );
+				dt.Columns.Add("ONCLICK_SCRIPT"              , typeof(String ) );
+				dt.Columns.Add("FORMAT_SCRIPT"               , typeof(String ) );
+				dt.Columns.Add("FORMAT_TAB_INDEX"            , typeof(Int16  ) );
+				dt.Columns.Add("FORMAT_MAX_LENGTH"           , typeof(Int32  ) );
+				dt.Columns.Add("FORMAT_SIZE"                 , typeof(Int32  ) );
+				dt.Columns.Add("FORMAT_ROWS"                 , typeof(Int32  ) );
+				dt.Columns.Add("FORMAT_COLUMNS"              , typeof(Int32  ) );
+				dt.Columns.Add("COLSPAN"                     , typeof(Int32  ) );
+				dt.Columns.Add("ROWSPAN"                     , typeof(Int32  ) );
+				dt.Columns.Add("LABEL_WIDTH"                 , typeof(String ) );
+				dt.Columns.Add("FIELD_WIDTH"                 , typeof(String ) );
+				dt.Columns.Add("DATA_COLUMNS"                , typeof(Int32  ) );
+				dt.Columns.Add("MODULE_TYPE"                 , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_MODULE_NAME"  , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_VIEW_NAME"    , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_ID_FIELD"     , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_NAME_FIELD"   , typeof(String ) );
+				dt.Columns.Add("RELATED_VIEW_NAME"           , typeof(String ) );
+				dt.Columns.Add("RELATED_ID_FIELD"            , typeof(String ) );
+				dt.Columns.Add("RELATED_NAME_FIELD"          , typeof(String ) );
+				dt.Columns.Add("RELATED_JOIN_FIELD"          , typeof(String ) );
+				dt.Columns.Add("PARENT_FIELD"                , typeof(String ) );
+				dt.Columns.Add("FIELD_VALIDATOR_MESSAGE"     , typeof(String ) );
+				dt.Columns.Add("VALIDATION_TYPE"             , typeof(String ) );
+				dt.Columns.Add("REGULAR_EXPRESSION"          , typeof(String ) );
+				dt.Columns.Add("DATA_TYPE"                   , typeof(String ) );
+				dt.Columns.Add("MININUM_VALUE"               , typeof(String ) );
+				dt.Columns.Add("MAXIMUM_VALUE"               , typeof(String ) );
+				dt.Columns.Add("COMPARE_OPERATOR"            , typeof(String ) );
+				dt.Columns.Add("TOOL_TIP"                    , typeof(String ) );
+				
+				try
+				{
+					// 01/15/2013 Paul.  A customer wants to be able to change the assigned user as this was previously allowed in report prompts. 
+					bool bShowAssignedUser = false;
+					bShowAssignedUser = Sql.ToBoolean(Application["CONFIG.Reports.ShowAssignedUser"]);
+					// 05/03/2011 Paul.  We need to include the USER_ID because we cache the Assigned User ID and the Team ID. 
+					DataTable dtReportParameters = this.ReportParameters(sMODULE_NAME, sRDL);
+					if ( dtReportParameters != null && dtReportParameters.Rows.Count > 0 )
+					{
+						DataTable dtEditView = this.EditViewFields(sMODULE_NAME + ".EditView");
+						foreach ( DataRow rowParameter in dtReportParameters.Rows )
+						{
+							// 03/09/2012 Paul.  Making the data field upper case will simplify tests later. 
+							string sDATA_FIELD    = Sql.ToString(rowParameter["NAME"         ]).ToUpper();
+							string sDATA_LABEL    = Sql.ToString(rowParameter["PROMPT"       ]);
+							string sDATA_TYPE     = Sql.ToString(rowParameter["DATA_TYPE"    ]);
+							string sDEFAULT_VALUE = Sql.ToString(rowParameter["DEFAULT_VALUE"]);
+							bool   bHIDDEN        = Sql.ToBoolean(rowParameter["HIDDEN"      ]);
+							// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+							string sDATA_SET_NAME = Sql.ToString (rowParameter["DATA_SET_NAME"]);
+							bool   bMULTI_VALUE   = Sql.ToBoolean(rowParameter["MULTI_VALUE"  ]);
+							bool bFieldFound = false;
+							// 04/09/2011 Paul.  ID is not allowed as a parameter because it is used by the Report ID in the Dashlet. 
+							// 02/03/2012 Paul.  Add support for the Hidden flag. 
+							if ( sDATA_FIELD == "ID" || bHIDDEN )
+								continue;
+							foreach ( DataRow rowEditView in dtEditView.Rows )
+							{
+								// 03/09/2012 Paul.  ASSIGNED_USER_ID is a special parameter that is not a prompt. 
+								if ( sDATA_FIELD == Sql.ToString(rowEditView["DATA_FIELD"]) && sDATA_FIELD != "ASSIGNED_USER_ID" && sDATA_FIELD != "TEAM_ID" )
+								{
+									bFieldFound = true;
+									DataRow row = dt.NewRow();
+									dt.Rows.Add(row);
+									// 07/29/2012 Paul.  Since we are searching, we should follow SearchView rules as we don't want field level security to prevent editing. 
+									row["EDIT_NAME"                 ] = sMODULE_NAME + ".SearchView";
+									row["FIELD_INDEX"               ] = dt.Rows.Count;
+									row["FIELD_TYPE"                ] = rowEditView["FIELD_TYPE"                ];
+									// 03/04/2012 Paul.  Custom label was being applied to field, not label. 
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : Sql.ToString(rowEditView["DATA_LABEL"]);
+									row["DATA_FIELD"                ] = rowEditView["DATA_FIELD"                ];
+									row["DATA_FORMAT"               ] = rowEditView["DATA_FORMAT"               ];
+									row["DISPLAY_FIELD"             ] = rowEditView["DISPLAY_FIELD"             ];
+									row["CACHE_NAME"                ] = rowEditView["CACHE_NAME"                ];
+									row["DATA_REQUIRED"             ] = rowEditView["DATA_REQUIRED"             ];
+									row["UI_REQUIRED"               ] = rowEditView["UI_REQUIRED"               ];
+									row["ONCLICK_SCRIPT"            ] = rowEditView["ONCLICK_SCRIPT"            ];
+									row["FORMAT_SCRIPT"             ] = rowEditView["FORMAT_SCRIPT"             ];
+									row["FORMAT_TAB_INDEX"          ] = rowEditView["FORMAT_TAB_INDEX"          ];
+									row["FORMAT_MAX_LENGTH"         ] = rowEditView["FORMAT_MAX_LENGTH"         ];
+									row["FORMAT_SIZE"               ] = rowEditView["FORMAT_SIZE"               ];
+									row["FORMAT_ROWS"               ] = rowEditView["FORMAT_ROWS"               ];
+									row["FORMAT_COLUMNS"            ] = rowEditView["FORMAT_COLUMNS"            ];
+									//row["COLSPAN"                   ] = rowEditView["COLSPAN"                   ];
+									//row["ROWSPAN"                   ] = rowEditView["ROWSPAN"                   ];
+									row["LABEL_WIDTH"               ] = rowEditView["LABEL_WIDTH"               ];
+									row["FIELD_WIDTH"               ] = rowEditView["FIELD_WIDTH"               ];
+									row["DATA_COLUMNS"              ] = rowEditView["DATA_COLUMNS"              ];
+									row["MODULE_TYPE"               ] = rowEditView["MODULE_TYPE"               ];
+									//row["RELATED_SOURCE_MODULE_NAME"] = rowEditView["RELATED_SOURCE_MODULE_NAME"];
+									//row["RELATED_SOURCE_VIEW_NAME"  ] = rowEditView["RELATED_SOURCE_VIEW_NAME"  ];
+									//row["RELATED_SOURCE_ID_FIELD"   ] = rowEditView["RELATED_SOURCE_ID_FIELD"   ];
+									//row["RELATED_SOURCE_NAME_FIELD" ] = rowEditView["RELATED_SOURCE_NAME_FIELD" ];
+									//row["RELATED_VIEW_NAME"         ] = rowEditView["RELATED_VIEW_NAME"         ];
+									//row["RELATED_ID_FIELD"          ] = rowEditView["RELATED_ID_FIELD"          ];
+									//row["RELATED_NAME_FIELD"        ] = rowEditView["RELATED_NAME_FIELD"        ];
+									//row["RELATED_JOIN_FIELD"        ] = rowEditView["RELATED_JOIN_FIELD"        ];
+									//row["PARENT_FIELD"              ] = rowEditView["PARENT_FIELD"              ];
+									row["FIELD_VALIDATOR_MESSAGE"   ] = rowEditView["FIELD_VALIDATOR_MESSAGE"   ];
+									row["VALIDATION_TYPE"           ] = rowEditView["VALIDATION_TYPE"           ];
+									row["REGULAR_EXPRESSION"        ] = rowEditView["REGULAR_EXPRESSION"        ];
+									row["DATA_TYPE"                 ] = rowEditView["DATA_TYPE"                 ];
+									row["MININUM_VALUE"             ] = rowEditView["MININUM_VALUE"             ];
+									row["MAXIMUM_VALUE"             ] = rowEditView["MAXIMUM_VALUE"             ];
+									row["COMPARE_OPERATOR"          ] = rowEditView["COMPARE_OPERATOR"          ];
+									row["TOOL_TIP"                  ] = rowEditView["TOOL_TIP"                  ];
+									// 03/04/2012 Paul.  Apply MultiValue flag if set in the report. 
+									if ( Sql.ToString(row["FIELD_TYPE"]) == "ListBox" && bMULTI_VALUE )
+										row["FORMAT_ROWS"] = 4;
+									// 03/24/2018 Paul.  It does not make sense to use the mandatory field flag on an report serach. 
+									row["UI_REQUIRED"] = false;
+									// 04/28/2018 Paul.  We need to make sure to treat data sets as a list. 
+									if ( !Sql.IsEmptyString(sDATA_SET_NAME) )
+									{
+										row["FIELD_TYPE"                ] = "ListBox";
+										row["CACHE_NAME"                ] = sDATA_SET_NAME;
+										row["MODULE_TYPE"               ] = DBNull.Value;
+										if ( bMULTI_VALUE )
+											row["FORMAT_ROWS"] = 4;
+									}
+									break;
+								}
+							}
+							// 03/09/2012 Paul.  ASSIGNED_USER_ID is a special parameter that is not a prompt. 
+							// 01/15/2013 Paul.  A customer wants to be able to change the assigned user as this was previously allowed in report prompts. 
+							if ( !bFieldFound && (bShowAssignedUser || (sDATA_FIELD != "ASSIGNED_USER_ID" && sDATA_FIELD != "TEAM_ID")) )
+							{
+								DataRow row = dt.NewRow();
+								dt.Rows.Add(row);
+								// 07/29/2012 Paul.  Since we are searching, we should follow SearchView rules as we don't want field level security to prevent editing. 
+								row["EDIT_NAME"                 ] = sMODULE_NAME + ".SearchView";
+								row["FIELD_INDEX"               ] = dt.Rows.Count;
+								// 03/06/2012 Paul.  A report parameter can have a special Date Rule field. 
+								if ( sDATA_FIELD == "DATE_RULE" )
+								{
+									row["FIELD_TYPE"                ] = "ListBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									row["CACHE_NAME"                ] = "date_rule_dom";
+								}
+								// 11/15/2011 Paul.  If the value starts with a equals, then this is a formula and should not be treated as a date control. 
+								else if ( sDEFAULT_VALUE.StartsWith("=") )
+								{
+									row["FIELD_TYPE"                ] = "TextBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+								}
+								// 04/28/2018 Paul.  Data Set has higher priority than _ID type. 
+								else if ( !Sql.IsEmptyString(sDATA_SET_NAME) )
+								{
+									row["FIELD_TYPE"                ] = "ListBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									row["CACHE_NAME"                ] = sDATA_SET_NAME;
+									if ( bMULTI_VALUE )
+										row["FORMAT_ROWS"] = 4;
+								}
+								else if ( sDATA_FIELD.EndsWith("_ID") )
+								{
+									// 01/15/2013 Paul.  If the field ends in ID, then the module name must be determined from the field. 
+									string sPOPUP_TABLE_NAME = sDATA_FIELD.Substring(0, sDATA_FIELD.Length - 3);
+									if ( sDATA_FIELD == "ASSIGNED_USER_ID" )
+										sPOPUP_TABLE_NAME = "USERS";
+									else if ( sPOPUP_TABLE_NAME.EndsWith("Y") )
+										sPOPUP_TABLE_NAME = sDATA_FIELD.Substring(0, sDATA_FIELD.Length - 4) + "IES";
+									else if ( sPOPUP_TABLE_NAME != "PROJECT" && sPOPUP_TABLE_NAME != "PROJECT_TASK" )
+										sPOPUP_TABLE_NAME += "S";
+									string sPOPUP_MODULE_NAME = CrmModules.ModuleName(sPOPUP_TABLE_NAME);
+									row["FIELD_TYPE"                ] = "ModulePopup";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sPOPUP_MODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									row["MODULE_TYPE"               ] = sPOPUP_MODULE_NAME;
+									row["DISPLAY_FIELD"             ] = sDATA_FIELD.Substring(0, sDATA_FIELD.Length - 2) + "NAME";
+									// 04/09/2011 Paul.  Auto-submit the selection. 
+									// Auto-submit is not working because we need to hit the actual submit button in order to get parameter processing. 
+									//row["DATA_FORMAT"               ] = "1";
+								}
+								else if ( sDATA_FIELD.StartsWith("DATETIME_") || sDATA_FIELD.EndsWith("_DATETIME") || sDATA_FIELD.Contains("_DATETIME_") )
+								{
+									row["FIELD_TYPE"                ] = "DateTimePicker";
+									// 04/11/2016 Paul.  Use BuildTermName. 
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : Utils.BuildTermName(sMODULE_NAME, sDATA_FIELD);
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+								}
+								else if ( sDATA_TYPE == "DateTime" || sDATA_FIELD.StartsWith("DATE_") || sDATA_FIELD.EndsWith("_DATE") || sDATA_FIELD.Contains("_DATE_") )
+								{
+									row["FIELD_TYPE"                ] = "DatePicker";
+									// 04/11/2016 Paul.  Use BuildTermName. 
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : Utils.BuildTermName(sMODULE_NAME, sDATA_FIELD);
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									// 04/11/2016 Paul.  Special support for between clause as a parameter. Needed to be separated into 2 report parameters. 
+									if ( bMULTI_VALUE )
+									{
+										DataRow row2 = dt.NewRow();
+										dt.Rows.Add(row2);
+										for ( int i = 0; i < dt.Columns.Count; i++ )
+										{
+											row2[i] = row[i];
+										}
+										row ["DATA_FIELD"] = sDATA_FIELD + "_AFTER" ;
+										row2["DATA_FIELD"] = sDATA_FIELD + "_BEFORE";
+										if ( Session != null )
+										{
+											row ["DATA_LABEL"] =  L10n.Term(Utils.BuildTermName(sMODULE_NAME, sDATA_FIELD)) + " " + L10n.Term("SavedSearch.LBL_SEARCH_AFTER" );
+											row2["DATA_LABEL"] =  L10n.Term(Utils.BuildTermName(sMODULE_NAME, sDATA_FIELD)) + " " + L10n.Term("SavedSearch.LBL_SEARCH_BEFORE");
+										}
+									}
+								}
+								// 03/06/2012 Paul.  A report parameter can include an Assigned To list. 
+								else if ( sDATA_FIELD == "ASSIGNED_TO" )
+								{
+									row["FIELD_TYPE"                ] = "ListBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									row["CACHE_NAME"                ] = "AssignedTo";
+									if ( bMULTI_VALUE )
+										row["FORMAT_ROWS"] = 4;
+								}
+								else
+								{
+									row["FIELD_TYPE"                ] = "TextBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+								}
+								//row["DATA_FORMAT"               ] = rowEditView["DATA_FORMAT"               ];
+								//row["DISPLAY_FIELD"             ] = rowEditView["DISPLAY_FIELD"             ];
+								//row["CACHE_NAME"                ] = rowEditView["CACHE_NAME"                ];
+								//row["DATA_REQUIRED"             ] = rowEditView["DATA_REQUIRED"             ];
+								//row["UI_REQUIRED"               ] = rowEditView["UI_REQUIRED"               ];
+								//row["ONCLICK_SCRIPT"            ] = rowEditView["ONCLICK_SCRIPT"            ];
+								//row["FORMAT_SCRIPT"             ] = rowEditView["FORMAT_SCRIPT"             ];
+								//row["FORMAT_TAB_INDEX"          ] = rowEditView["FORMAT_TAB_INDEX"          ];
+								//row["FORMAT_MAX_LENGTH"         ] = rowEditView["FORMAT_MAX_LENGTH"         ];
+								//row["FORMAT_SIZE"               ] = rowEditView["FORMAT_SIZE"               ];
+								//row["FORMAT_ROWS"               ] = rowEditView["FORMAT_ROWS"               ];
+								//row["FORMAT_COLUMNS"            ] = rowEditView["FORMAT_COLUMNS"            ];
+								//row["COLSPAN"                   ] = rowEditView["COLSPAN"                   ];
+								//row["ROWSPAN"                   ] = rowEditView["ROWSPAN"                   ];
+								//row["LABEL_WIDTH"               ] = rowEditView["LABEL_WIDTH"               ];
+								//row["FIELD_WIDTH"               ] = rowEditView["FIELD_WIDTH"               ];
+								//row["DATA_COLUMNS"              ] = rowEditView["DATA_COLUMNS"              ];
+								//row["MODULE_TYPE"               ] = rowEditView["MODULE_TYPE"               ];
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 08/11/2014 Paul.  We need a similar method to get report parameters from an unsaved report. 
+		public DataTable ReportParameters(string sMODULE_NAME, string sRDL)
+		{
+			DataTable dt = null;
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				dt.Columns.Add("NAME"         , typeof(String));
+				dt.Columns.Add("MODULE_NAME"  , typeof(String));
+				dt.Columns.Add("DATA_TYPE"    , typeof(String));  // String, Boolean, DateTime, Integer, Float
+				dt.Columns.Add("NULLABLE"     , typeof(bool  ));
+				dt.Columns.Add("ALLOW_BLANK"  , typeof(bool  ));
+				dt.Columns.Add("MULTI_VALUE"  , typeof(bool  ));
+				// 02/03/2012 Paul.  Add support for the Hidden flag. 
+				dt.Columns.Add("HIDDEN"       , typeof(bool  ));
+				dt.Columns.Add("PROMPT"       , typeof(String));
+				dt.Columns.Add("DEFAULT_VALUE", typeof(String));
+				// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+				dt.Columns.Add("DATA_SET_NAME"   , typeof(String));
+				
+				try
+				{
+					if ( !Sql.IsEmptyString(sMODULE_NAME) )
+					{
+						
+						RdlDocument rdl = new RdlDocument(hostingEnvironment, Session, Security, this, XmlUtil);
+						rdl.LoadRdl(sRDL);
+						rdl.NamespaceManager.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+						
+						// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+						string sReportID = rdl.SelectNodeValue("rd:ReportID");
+						XmlNodeList nlReportParameters = rdl.SelectNodesNS("ReportParameters/ReportParameter");
+						foreach ( XmlNode xReportParameter in nlReportParameters )
+						{
+							DataRow row = dt.NewRow();
+							dt.Rows.Add(row);
+							// 11/15/2011 Paul.  Must use rdl.SelectNodeValue to get the properties. 
+							string sName         = XmlUtil.GetNamedItem    (xReportParameter, "Name"    );
+							string sDataType     = rdl.SelectNodeValue(xReportParameter, "DataType");
+							bool   bNullable     = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "Nullable"  ));
+							bool   bAllowBlank   = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "AllowBlank"));
+							bool   bMultiValue   = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "MultiValue"));
+							// 02/03/2012 Paul.  Add support for the Hidden flag. 
+							bool   bHidden       = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "Hidden"    ));
+							string sPrompt       = rdl.SelectNodeValue(xReportParameter, "Prompt"  );
+							// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+							string sDataSetName    = rdl.SelectNodeValue(xReportParameter, "ValidValues/DataSetReference/DataSetName");
+							string sDefaultValue   = rdl.SelectNodeValue(xReportParameter, "DefaultValue/Values/Value");
+							// 02/16/2012 Paul.  Add support for specific parameter values. 
+							XmlNodeList nlValidValues = rdl.SelectNodesNS(xReportParameter, "ValidValues/ParameterValues/ParameterValue");
+							if ( nlValidValues.Count > 0 )
+							{
+								DataTable dtValidValues = new DataTable();
+								dtValidValues.Columns.Add("VALUE", typeof(String));
+								dtValidValues.Columns.Add("NAME" , typeof(String));
+								foreach ( XmlNode xValidValue in nlValidValues )
+								{
+									DataRow rowValid = dtValidValues.NewRow();
+									rowValid["VALUE"] = rdl.SelectNodeValue(xValidValue, "Value");
+									rowValid["NAME" ] = rdl.SelectNodeValue(xValidValue, "Label");
+									dtValidValues.Rows.Add(rowValid);
+								}
+								this.AddReportSource(sReportID + "." + sName + ".SpecificValues", "VALUE", "NAME", dtValidValues);
+								row["DATA_SET_NAME"] = sReportID + "." + sName + ".SpecificValues";
+							}
+							// 03/04/2012 Paul.  Collection of values. 
+							XmlNodeList nlDefaultValues = rdl.SelectNodesNS(xReportParameter, "DefaultValue/Values/Value");
+							if ( nlDefaultValues.Count > 0 )
+							{
+								if ( bMultiValue )
+								{
+									XmlDocument xml = new XmlDocument();
+									xml.AppendChild(xml.CreateXmlDeclaration("1.0", "UTF-8", null));
+									xml.AppendChild(xml.CreateElement("Values"));
+									foreach ( XmlNode xDefaultValue in nlDefaultValues )
+									{
+										XmlNode xValue = xml.CreateElement("Value");
+										xml.DocumentElement.AppendChild(xValue);
+										// 10/05/2012 Paul.  Check default value for null, not new value. 
+										bool bNull = Sql.ToBoolean(XmlUtil.GetNamedItem(xDefaultValue, "xsi:nil"));
+										if ( !bNull )
+											xValue.InnerText = xDefaultValue.InnerText;
+									}
+									row["DEFAULT_VALUE"] = xml.OuterXml;
+								}
+								else
+								{
+									// <Value xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true" />
+									XmlNode xDefaultValue = nlDefaultValues[0];
+									bool bNull = Sql.ToBoolean(XmlUtil.GetNamedItem(xDefaultValue, "xsi:nil"));
+									if ( !bNull )
+										row["DEFAULT_VALUE"] = Sql.ToString(xDefaultValue.InnerText);
+								}
+							}
+							
+							row["NAME"       ] = sName       ;
+							row["MODULE_NAME"] = sMODULE_NAME;
+							row["DATA_TYPE"  ] = sDataType   ;
+							row["NULLABLE"   ] = bNullable   ;
+							row["ALLOW_BLANK"] = bAllowBlank ;
+							row["MULTI_VALUE"] = bMultiValue ;
+							// 02/03/2012 Paul.  Add support for the Hidden flag. 
+							row["HIDDEN"     ] = bHidden     ;
+							row["PROMPT"     ] = sPrompt     ;
+							// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+							if ( !Sql.IsEmptyString(sDataSetName) )
+								row["DATA_SET_NAME"] = sReportID + "." + sDataSetName;
+							if ( String.Compare(sName, "ASSIGNED_USER_ID", true) == 0 )
+							{
+								row["DEFAULT_VALUE"] = Security.USER_ID.ToString();
+							}
+							else if ( String.Compare(sName, "TEAM_ID", true) == 0 )
+							{
+								row["DEFAULT_VALUE"] = Security.TEAM_ID.ToString();
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 10/01/2012 Paul.  Caching by name might not be a good idea as we may have issues clearing the cache value. 
+		public Guid ReportByName(string sReportName)
+		{
+			Guid gID = Guid.Empty;
+			try
+			{
+				DbProviderFactory dbf = DbProviderFactories.GetFactory();
+				using ( IDbConnection con = dbf.CreateConnection() )
+				{
+					con.Open();
+					string sSQL;
+					sSQL = "select ID            " + ControlChars.CrLf
+					     + "  from vwREPORTS_Edit" + ControlChars.CrLf
+					     + " where NAME = @NAME  " + ControlChars.CrLf;
+					using ( IDbCommand cmd = con.CreateCommand() )
+					{
+						cmd.CommandText = sSQL;
+						Sql.AddParameter(cmd, "@NAME", sReportName);
+						gID = Sql.ToGuid(cmd.ExecuteScalar());
+					}
+				}
+			}
+			catch(Exception ex)
+			{
+				SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+			}
+			return gID;
+		}
+
+		// 04/06/2011 Paul.  Cache reports. 
+		public DataTable Report(Guid gID)
+		{
+			DataTable dt = Cache.Get("vwREPORTS." + gID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select *             " + ControlChars.CrLf
+						     + "  from vwREPORTS_Edit" + ControlChars.CrLf
+						     + " where ID = @ID      " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							Sql.AddParameter(cmd, "@ID", gID);
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwREPORTS." + gID.ToString(), dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 01/24/2010 Paul.  Clear the Report List on save. 
+		public void ClearReports()
+		{
+			try
+			{
+				Session.Remove("vwREPORTS_List." + Security.USER_ID.ToString());
+			}
+			catch(Exception ex)
+			{
+				SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+			}
+		}
+
+		// 01/24/2010 Paul.  Place the report list in the cache so that it would be available in SearchView. 
+		public DataTable Reports()
+		{
+			DataTable dt = Session.GetTable("vwREPORTS_List." + Security.USER_ID.ToString());
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				try
+				{
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL;
+							sSQL = "select ID            " + ControlChars.CrLf
+							     + "     , NAME          " + ControlChars.CrLf
+							     + "  from vwREPORTS_List" + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								//Sql.AddParameter(cmd, "@ASSIGNED_USER_ID", Security.USER_ID);
+								// 01/20/2011 Paul.  Use new Security.Filter() function to apply Team and ACL security rules.
+								// This new approach to report security should have been applied many months ago. 
+								Security.Filter(cmd, "Reports", "list");
+								cmd.CommandText += " order by NAME" + ControlChars.CrLf;
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									da.Fill(dt);
+									Session.SetTable("vwREPORTS_List." + Security.USER_ID.ToString(), dt);
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		public DataTable ChartParametersEditView(Guid gID, Guid gUSER_ID)
+		{
+			DataTable dt = Cache.Get("vwCHARTS.Parameters.EditView." + gID.ToString() + "." + gUSER_ID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				dt.Columns.Add("EDIT_NAME"                   , typeof(String ) );
+				dt.Columns.Add("FIELD_INDEX"                 , typeof(Int32  ) );
+				dt.Columns.Add("FIELD_TYPE"                  , typeof(String ) );
+				dt.Columns.Add("DATA_LABEL"                  , typeof(String ) );
+				dt.Columns.Add("DATA_FIELD"                  , typeof(String ) );
+				dt.Columns.Add("DATA_FORMAT"                 , typeof(String ) );
+				dt.Columns.Add("DISPLAY_FIELD"               , typeof(String ) );
+				dt.Columns.Add("CACHE_NAME"                  , typeof(String ) );
+				dt.Columns.Add("DATA_REQUIRED"               , typeof(Boolean) );
+				dt.Columns.Add("UI_REQUIRED"                 , typeof(Boolean) );
+				dt.Columns.Add("ONCLICK_SCRIPT"              , typeof(String ) );
+				dt.Columns.Add("FORMAT_SCRIPT"               , typeof(String ) );
+				dt.Columns.Add("FORMAT_TAB_INDEX"            , typeof(Int16  ) );
+				dt.Columns.Add("FORMAT_MAX_LENGTH"           , typeof(Int32  ) );
+				dt.Columns.Add("FORMAT_SIZE"                 , typeof(Int32  ) );
+				dt.Columns.Add("FORMAT_ROWS"                 , typeof(Int32  ) );
+				dt.Columns.Add("FORMAT_COLUMNS"              , typeof(Int32  ) );
+				dt.Columns.Add("COLSPAN"                     , typeof(Int32  ) );
+				dt.Columns.Add("ROWSPAN"                     , typeof(Int32  ) );
+				dt.Columns.Add("LABEL_WIDTH"                 , typeof(String ) );
+				dt.Columns.Add("FIELD_WIDTH"                 , typeof(String ) );
+				dt.Columns.Add("DATA_COLUMNS"                , typeof(Int32  ) );
+				dt.Columns.Add("MODULE_TYPE"                 , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_MODULE_NAME"  , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_VIEW_NAME"    , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_ID_FIELD"     , typeof(String ) );
+				dt.Columns.Add("RELATED_SOURCE_NAME_FIELD"   , typeof(String ) );
+				dt.Columns.Add("RELATED_VIEW_NAME"           , typeof(String ) );
+				dt.Columns.Add("RELATED_ID_FIELD"            , typeof(String ) );
+				dt.Columns.Add("RELATED_NAME_FIELD"          , typeof(String ) );
+				dt.Columns.Add("RELATED_JOIN_FIELD"          , typeof(String ) );
+				dt.Columns.Add("PARENT_FIELD"                , typeof(String ) );
+				dt.Columns.Add("FIELD_VALIDATOR_MESSAGE"     , typeof(String ) );
+				dt.Columns.Add("VALIDATION_TYPE"             , typeof(String ) );
+				dt.Columns.Add("REGULAR_EXPRESSION"          , typeof(String ) );
+				dt.Columns.Add("DATA_TYPE"                   , typeof(String ) );
+				dt.Columns.Add("MININUM_VALUE"               , typeof(String ) );
+				dt.Columns.Add("MAXIMUM_VALUE"               , typeof(String ) );
+				dt.Columns.Add("COMPARE_OPERATOR"            , typeof(String ) );
+				dt.Columns.Add("TOOL_TIP"                    , typeof(String ) );
+				
+				try
+				{
+					// 01/15/2013 Paul.  A customer wants to be able to change the assigned user as this was previously allowed in report prompts. 
+					bool bShowAssignedUser = false;
+					bShowAssignedUser = Sql.ToBoolean(Application["CONFIG.Reports.ShowAssignedUser"]);
+					// 05/03/2011 Paul.  We need to include the USER_ID because we cache the Assigned User ID and the Team ID. 
+					DataTable dtChartParameters = this.ChartParameters(gID, gUSER_ID);
+					if ( dtChartParameters != null && dtChartParameters.Rows.Count > 0 )
+					{
+						string sMODULE_NAME = Sql.ToString(dtChartParameters.Rows[0]["MODULE_NAME"]);
+						DataTable dtEditView = this.EditViewFields(sMODULE_NAME + ".EditView");
+						foreach ( DataRow rowParameter in dtChartParameters.Rows )
+						{
+							string sDATA_FIELD    = Sql.ToString(rowParameter["NAME"         ]);
+							string sDATA_LABEL    = Sql.ToString(rowParameter["PROMPT"       ]);
+							string sDATA_TYPE     = Sql.ToString(rowParameter["DATA_TYPE"    ]);
+							string sDEFAULT_VALUE = Sql.ToString(rowParameter["DEFAULT_VALUE"]);
+							bool   bHIDDEN        = Sql.ToBoolean(rowParameter["HIDDEN"      ]);
+							// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+							string sDATA_SET_NAME = Sql.ToString (rowParameter["DATA_SET_NAME"]);
+							bool   bMULTI_VALUE   = Sql.ToBoolean(rowParameter["MULTI_VALUE"  ]);
+							bool bFieldFound = false;
+							// 04/09/2011 Paul.  ID is not allowed as a parameter because it is used by the Report ID in the Dashlet. 
+							// 02/03/2012 Paul.  Add support for the Hidden flag. 
+							if ( sDATA_FIELD == "ID" || bHIDDEN )
+								continue;
+							foreach ( DataRow rowEditView in dtEditView.Rows )
+							{
+								if ( sDATA_FIELD == Sql.ToString(rowEditView["DATA_FIELD"]) )
+								{
+									bFieldFound = true;
+									DataRow row = dt.NewRow();
+									dt.Rows.Add(row);
+									// 07/29/2012 Paul.  Since we are searching, we should follow SearchView rules as we don't want field level security to prevent editing. 
+									row["EDIT_NAME"                 ] = sMODULE_NAME + ".SearchView";
+									row["FIELD_INDEX"               ] = dt.Rows.Count;
+									row["FIELD_TYPE"                ] = rowEditView["FIELD_TYPE"                ];
+									// 03/04/2012 Paul.  Custom label was being applied to field, not label. 
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : Sql.ToString(rowEditView["DATA_LABEL"]);
+									row["DATA_FIELD"                ] = rowEditView["DATA_FIELD"                ];
+									row["DATA_FORMAT"               ] = rowEditView["DATA_FORMAT"               ];
+									row["DISPLAY_FIELD"             ] = rowEditView["DISPLAY_FIELD"             ];
+									row["CACHE_NAME"                ] = rowEditView["CACHE_NAME"                ];
+									row["DATA_REQUIRED"             ] = rowEditView["DATA_REQUIRED"             ];
+									row["UI_REQUIRED"               ] = rowEditView["UI_REQUIRED"               ];
+									row["ONCLICK_SCRIPT"            ] = rowEditView["ONCLICK_SCRIPT"            ];
+									row["FORMAT_SCRIPT"             ] = rowEditView["FORMAT_SCRIPT"             ];
+									row["FORMAT_TAB_INDEX"          ] = rowEditView["FORMAT_TAB_INDEX"          ];
+									row["FORMAT_MAX_LENGTH"         ] = rowEditView["FORMAT_MAX_LENGTH"         ];
+									row["FORMAT_SIZE"               ] = rowEditView["FORMAT_SIZE"               ];
+									row["FORMAT_ROWS"               ] = rowEditView["FORMAT_ROWS"               ];
+									row["FORMAT_COLUMNS"            ] = rowEditView["FORMAT_COLUMNS"            ];
+									//row["COLSPAN"                   ] = rowEditView["COLSPAN"                   ];
+									//row["ROWSPAN"                   ] = rowEditView["ROWSPAN"                   ];
+									row["LABEL_WIDTH"               ] = rowEditView["LABEL_WIDTH"               ];
+									row["FIELD_WIDTH"               ] = rowEditView["FIELD_WIDTH"               ];
+									row["DATA_COLUMNS"              ] = rowEditView["DATA_COLUMNS"              ];
+									row["MODULE_TYPE"               ] = rowEditView["MODULE_TYPE"               ];
+									//row["RELATED_SOURCE_MODULE_NAME"] = rowEditView["RELATED_SOURCE_MODULE_NAME"];
+									//row["RELATED_SOURCE_VIEW_NAME"  ] = rowEditView["RELATED_SOURCE_VIEW_NAME"  ];
+									//row["RELATED_SOURCE_ID_FIELD"   ] = rowEditView["RELATED_SOURCE_ID_FIELD"   ];
+									//row["RELATED_SOURCE_NAME_FIELD" ] = rowEditView["RELATED_SOURCE_NAME_FIELD" ];
+									//row["RELATED_VIEW_NAME"         ] = rowEditView["RELATED_VIEW_NAME"         ];
+									//row["RELATED_ID_FIELD"          ] = rowEditView["RELATED_ID_FIELD"          ];
+									//row["RELATED_NAME_FIELD"        ] = rowEditView["RELATED_NAME_FIELD"        ];
+									//row["RELATED_JOIN_FIELD"        ] = rowEditView["RELATED_JOIN_FIELD"        ];
+									//row["PARENT_FIELD"              ] = rowEditView["PARENT_FIELD"              ];
+									row["FIELD_VALIDATOR_MESSAGE"   ] = rowEditView["FIELD_VALIDATOR_MESSAGE"   ];
+									row["VALIDATION_TYPE"           ] = rowEditView["VALIDATION_TYPE"           ];
+									row["REGULAR_EXPRESSION"        ] = rowEditView["REGULAR_EXPRESSION"        ];
+									row["DATA_TYPE"                 ] = rowEditView["DATA_TYPE"                 ];
+									row["MININUM_VALUE"             ] = rowEditView["MININUM_VALUE"             ];
+									row["MAXIMUM_VALUE"             ] = rowEditView["MAXIMUM_VALUE"             ];
+									row["COMPARE_OPERATOR"          ] = rowEditView["COMPARE_OPERATOR"          ];
+									row["TOOL_TIP"                  ] = rowEditView["TOOL_TIP"                  ];
+									// 03/04/2012 Paul.  Apply MultiValue flag if set in the report. 
+									if ( Sql.ToString(row["FIELD_TYPE"]) == "ListBox" && bMULTI_VALUE )
+										row["FORMAT_ROWS"] = 4;
+									// 03/24/2018 Paul.  It does not make sense to use the mandatory field flag on an report serach. 
+									row["UI_REQUIRED"] = false;
+									// 04/28/2018 Paul.  We need to make sure to treat data sets as a list. 
+									if ( !Sql.IsEmptyString(sDATA_SET_NAME) )
+									{
+										row["FIELD_TYPE"                ] = "ListBox";
+										row["CACHE_NAME"                ] = sDATA_SET_NAME;
+										row["MODULE_TYPE"               ] = DBNull.Value;
+										if ( bMULTI_VALUE )
+											row["FORMAT_ROWS"] = 4;
+									}
+									break;
+								}
+							}
+							// 01/15/2013 Paul.  ASSIGNED_USER_ID is a special parameter that is not a prompt. 
+							// 01/15/2013 Paul.  A customer wants to be able to change the assigned user as this was previously allowed in report prompts. 
+							if ( !bFieldFound && (bShowAssignedUser || (sDATA_FIELD != "ASSIGNED_USER_ID" && sDATA_FIELD != "TEAM_ID")) )
+							{
+								DataRow row = dt.NewRow();
+								dt.Rows.Add(row);
+								// 07/29/2012 Paul.  Since we are searching, we should follow SearchView rules as we don't want field level security to prevent editing. 
+								row["EDIT_NAME"                 ] = sMODULE_NAME + ".SearchView";
+								row["FIELD_INDEX"               ] = dt.Rows.Count;
+								// 11/15/2011 Paul.  If the value starts with a equals, then this is a formula and should not be treated as a date control. 
+								if ( sDEFAULT_VALUE.StartsWith("=") )
+								{
+									row["FIELD_TYPE"                ] = "TextBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+								}
+								// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+								// 04/28/2018 Paul.  Data Set has higher priority than _ID type. 
+								else if ( !Sql.IsEmptyString(sDATA_SET_NAME) )
+								{
+									row["FIELD_TYPE"                ] = "ListBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									row["CACHE_NAME"                ] = sDATA_SET_NAME;
+									if ( bMULTI_VALUE )
+										row["FORMAT_ROWS"] = 4;
+								}
+								else if ( sDATA_FIELD.EndsWith("_ID") )
+								{
+									// 01/15/2013 Paul.  If the field ends in ID, then the module name must be determined from the field. 
+									string sPOPUP_TABLE_NAME = sDATA_FIELD.Substring(0, sDATA_FIELD.Length - 3);
+									if ( sDATA_FIELD == "ASSIGNED_USER_ID" )
+										sPOPUP_TABLE_NAME = "USERS";
+									else if ( sPOPUP_TABLE_NAME.EndsWith("Y") )
+										sPOPUP_TABLE_NAME = sDATA_FIELD.Substring(0, sDATA_FIELD.Length - 4) + "IES";
+									else if ( sPOPUP_TABLE_NAME != "PROJECT" && sPOPUP_TABLE_NAME != "PROJECT_TASK" )
+										sPOPUP_TABLE_NAME += "S";
+									string sPOPUP_MODULE_NAME = CrmModules.ModuleName(sPOPUP_TABLE_NAME);
+									row["FIELD_TYPE"                ] = "ModulePopup";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sPOPUP_MODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+									row["MODULE_TYPE"               ] = sPOPUP_MODULE_NAME;
+									row["DISPLAY_FIELD"             ] = sDATA_FIELD.Substring(0, sDATA_FIELD.Length - 2) + "NAME";
+									// 04/09/2011 Paul.  Auto-submit the selection. 
+									// Auto-submit is not working because we need to hit the actual submit button in order to get parameter processing. 
+									//row["DATA_FORMAT"               ] = "1";
+								}
+								else if ( sDATA_FIELD.StartsWith("DATETIME_") || sDATA_FIELD.EndsWith("_DATETIME") || sDATA_FIELD.Contains("_DATETIME_") )
+								{
+									row["FIELD_TYPE"                ] = "DateTimePicker";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+								}
+								else if ( sDATA_TYPE == "DateTime" || sDATA_FIELD.StartsWith("DATE_") || sDATA_FIELD.EndsWith("_DATE") || sDATA_FIELD.Contains("_DATE_") )
+								{
+									row["FIELD_TYPE"                ] = "DatePicker";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+								}
+								else
+								{
+									row["FIELD_TYPE"                ] = "TextBox";
+									row["DATA_LABEL"                ] = !Sql.IsEmptyString(sDATA_LABEL) ? sDATA_LABEL : sMODULE_NAME + ".LBL_" + sDATA_FIELD;
+									row["DATA_FIELD"                ] = sDATA_FIELD;
+								}
+								//row["DATA_FORMAT"               ] = rowEditView["DATA_FORMAT"               ];
+								//row["DISPLAY_FIELD"             ] = rowEditView["DISPLAY_FIELD"             ];
+								//row["CACHE_NAME"                ] = rowEditView["CACHE_NAME"                ];
+								//row["DATA_REQUIRED"             ] = rowEditView["DATA_REQUIRED"             ];
+								//row["UI_REQUIRED"               ] = rowEditView["UI_REQUIRED"               ];
+								//row["ONCLICK_SCRIPT"            ] = rowEditView["ONCLICK_SCRIPT"            ];
+								//row["FORMAT_SCRIPT"             ] = rowEditView["FORMAT_SCRIPT"             ];
+								//row["FORMAT_TAB_INDEX"          ] = rowEditView["FORMAT_TAB_INDEX"          ];
+								//row["FORMAT_MAX_LENGTH"         ] = rowEditView["FORMAT_MAX_LENGTH"         ];
+								//row["FORMAT_SIZE"               ] = rowEditView["FORMAT_SIZE"               ];
+								//row["FORMAT_ROWS"               ] = rowEditView["FORMAT_ROWS"               ];
+								//row["FORMAT_COLUMNS"            ] = rowEditView["FORMAT_COLUMNS"            ];
+								//row["COLSPAN"                   ] = rowEditView["COLSPAN"                   ];
+								//row["ROWSPAN"                   ] = rowEditView["ROWSPAN"                   ];
+								//row["LABEL_WIDTH"               ] = rowEditView["LABEL_WIDTH"               ];
+								//row["FIELD_WIDTH"               ] = rowEditView["FIELD_WIDTH"               ];
+								//row["DATA_COLUMNS"              ] = rowEditView["DATA_COLUMNS"              ];
+								//row["MODULE_TYPE"               ] = rowEditView["MODULE_TYPE"               ];
+							}
+						}
+					}
+					Cache.Set("vwCHARTS.Parameters.EditView." + gID.ToString() + "." + gUSER_ID.ToString(), dt, DefaultCacheExpiration());
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 05/03/2011 Paul.  We need to include the USER_ID because we cache the Assigned User ID and the Team ID. 
+		public DataTable ChartParameters(Guid gID, Guid gUSER_ID)
+		{
+			DataTable dt = Cache.Get("vwCHARTS.Parameters." + gID.ToString() + "." + gUSER_ID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				dt.Columns.Add("NAME"         , typeof(String));
+				dt.Columns.Add("MODULE_NAME"  , typeof(String));
+				dt.Columns.Add("DATA_TYPE"    , typeof(String));  // String, Boolean, DateTime, Integer, Float
+				dt.Columns.Add("NULLABLE"     , typeof(bool  ));
+				dt.Columns.Add("ALLOW_BLANK"  , typeof(bool  ));
+				dt.Columns.Add("MULTI_VALUE"  , typeof(bool  ));
+				// 02/03/2012 Paul.  Add support for the Hidden flag. 
+				dt.Columns.Add("HIDDEN"       , typeof(bool  ));
+				dt.Columns.Add("PROMPT"       , typeof(String));
+				dt.Columns.Add("DEFAULT_VALUE", typeof(String));
+				// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+				dt.Columns.Add("DATA_SET_NAME"   , typeof(String));
+				
+				try
+				{
+					DataTable dtChart = this.Chart(gID);
+					if ( dtChart.Rows.Count > 0 )
+					{
+						DataRow rdr = dtChart.Rows[0];
+						string sRDL         = Sql.ToString(rdr["RDL"        ]);
+						string sMODULE_NAME = Sql.ToString(rdr["MODULE_NAME"]);
+						
+						RdlDocument rdl = new RdlDocument(hostingEnvironment, Session, Security, this, XmlUtil);
+						rdl.LoadRdl(sRDL);
+						rdl.NamespaceManager.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+						
+						// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+						string sReportID = rdl.SelectNodeValue("rd:ReportID");
+						XmlNodeList nlReportParameters = rdl.SelectNodesNS("ReportParameters/ReportParameter");
+						foreach ( XmlNode xReportParameter in nlReportParameters )
+						{
+							DataRow row = dt.NewRow();
+							dt.Rows.Add(row);
+							// 11/15/2011 Paul.  Must use rdl.SelectNodeValue to get the properties. 
+							string sName         = XmlUtil.GetNamedItem    (xReportParameter, "Name"    );
+							string sDataType     = rdl.SelectNodeValue(xReportParameter, "DataType");
+							bool   bNullable     = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "Nullable"  ));
+							bool   bAllowBlank   = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "AllowBlank"));
+							bool   bMultiValue   = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "MultiValue"));
+							// 02/03/2012 Paul.  Add support for the Hidden flag. 
+							bool   bHidden       = Sql.ToBoolean(rdl.SelectNodeValue(xReportParameter, "Hidden"    ));
+							string sPrompt       = rdl.SelectNodeValue(xReportParameter, "Prompt"  );
+							// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+							string sDataSetName    = rdl.SelectNodeValue(xReportParameter, "ValidValues/DataSetReference/DataSetName");
+							string sDefaultValue   = rdl.SelectNodeValue(xReportParameter, "DefaultValue/Values/Value");
+							// 02/16/2012 Paul.  Add support for specific parameter values. 
+							XmlNodeList nlValidValues = rdl.SelectNodesNS(xReportParameter, "ValidValues/ParameterValues/ParameterValue");
+							if ( nlValidValues.Count > 0 )
+							{
+								DataTable dtValidValues = new DataTable();
+								dtValidValues.Columns.Add("VALUE", typeof(String));
+								dtValidValues.Columns.Add("NAME" , typeof(String));
+								foreach ( XmlNode xValidValue in nlValidValues )
+								{
+									DataRow rowValid = dtValidValues.NewRow();
+									rowValid["VALUE"] = rdl.SelectNodeValue(xValidValue, "Value");
+									rowValid["NAME" ] = rdl.SelectNodeValue(xValidValue, "Label");
+									dtValidValues.Rows.Add(rowValid);
+								}
+								this.AddReportSource(sReportID + "." + sName + ".SpecificValues", "VALUE", "NAME", dtValidValues);
+								row["DATA_SET_NAME"] = sReportID + "." + sName + ".SpecificValues";
+							}
+							XmlNodeList nlDefaultValues = rdl.SelectNodesNS(xReportParameter, "DefaultValue/Values");
+							if ( nlDefaultValues.Count > 0 )
+							{
+								if ( bMultiValue )
+								{
+									XmlDocument xml = new XmlDocument();
+									xml.AppendChild(xml.CreateXmlDeclaration("1.0", "UTF-8", null));
+									xml.AppendChild(xml.CreateElement("Values"));
+									foreach ( XmlNode xDefaultValue in nlDefaultValues )
+									{
+										XmlNode xValue = xml.CreateElement("Value");
+										xml.DocumentElement.AppendChild(xValue);
+										// 10/05/2012 Paul.  Check default value for null, not new value. 
+										bool bNull = Sql.ToBoolean(XmlUtil.GetNamedItem(xDefaultValue, "xsi:nil"));
+										if ( !bNull )
+											xValue.InnerText = xDefaultValue.InnerText;
+									}
+									row["DEFAULT_VALUE"] = xml.OuterXml;
+								}
+								else
+								{
+									// <Value xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true" />
+									XmlNode xDefaultValue = nlDefaultValues[0];
+									bool bNull = Sql.ToBoolean(XmlUtil.GetNamedItem(xDefaultValue, "xsi:nil"));
+									if ( !bNull )
+										row["DEFAULT_VALUE"] = Sql.ToString(xDefaultValue.InnerText);
+								}
+							}
+							
+							row["NAME"       ] = sName       ;
+							row["MODULE_NAME"] = sMODULE_NAME;
+							row["DATA_TYPE"  ] = sDataType   ;
+							row["NULLABLE"   ] = bNullable   ;
+							row["ALLOW_BLANK"] = bAllowBlank ;
+							row["MULTI_VALUE"] = bMultiValue ;
+							// 02/03/2012 Paul.  Add support for the Hidden flag. 
+							row["HIDDEN"     ] = bHidden     ;
+							row["PROMPT"     ] = sPrompt     ;
+							// 02/16/2012 Paul.  We need a separate list for report parameter lists. 
+							if ( !Sql.IsEmptyString(sDataSetName) )
+								row["DATA_SET_NAME"] = sReportID + "." + sDataSetName;
+							if ( String.Compare(sName, "ASSIGNED_USER_ID", true) == 0 )
+							{
+								row["DEFAULT_VALUE"] = Security.USER_ID.ToString();
+							}
+							else if ( String.Compare(sName, "TEAM_ID", true) == 0 )
+							{
+								row["DEFAULT_VALUE"] = Security.TEAM_ID.ToString();
+							}
+						}
+					}
+					Cache.Set("vwCHARTS.Parameters." + gID.ToString() + "." + gUSER_ID.ToString(), dt, DefaultCacheExpiration());
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 10/29/2011 Paul.  Cache Charts. 
+		public DataTable Chart(Guid gID)
+		{
+			DataTable dt = Cache.Get("vwCHARTS." + gID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select *             " + ControlChars.CrLf
+						     + "  from vwCHARTS_Edit" + ControlChars.CrLf
+						     + " where ID = @ID      " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							Sql.AddParameter(cmd, "@ID", gID);
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwCHARTS." + gID.ToString(), dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 10/29/2011 Paul.  Clear the Chart List on save. 
+		public void ClearCharts()
+		{
+			try
+			{
+				Session.Remove("vwCHARTS_List." + Security.USER_ID.ToString());
+			}
+			catch(Exception ex)
+			{
+				SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+			}
+		}
+
+		public void ClearChart(Guid gID)
+		{
+			string sID = gID.ToString();
+			foreach(string sKey in GetCacheKeys())
+			{
+				if ( sKey.StartsWith("vwCHART.") && sKey.Contains(sID) )
+					Cache.Remove(sKey);
+			}
+		}
+
+		// 10/29/2011 Paul.  Place the chart list in the cache so that it would be available in SearchView. 
+		public DataTable Charts()
+		{
+			DataTable dt = Session.GetTable("vwCHARTS_List." + Security.USER_ID.ToString());
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				try
+				{
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL;
+							sSQL = "select ID            " + ControlChars.CrLf
+							     + "     , NAME          " + ControlChars.CrLf
+							     + "  from vwCHARTS_List" + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								Security.Filter(cmd, "Charts", "list");
+								cmd.CommandText += " order by NAME" + ControlChars.CrLf;
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									da.Fill(dt);
+									Session.SetTable("vwCHARTS_List." + Security.USER_ID.ToString(), dt);
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 06/03/2011 Paul.  Cache the Sync Table data. 
+		public DataTable SyncTables(string sTABLE_NAME, bool bExcludeSystemTables)
+		{
+			DataTable dt = Session.GetTable("vwSYSTEM_SYNC_TABLES." + sTABLE_NAME);
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				try
+				{
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL;
+							sSQL = "select MODULE_NAME                " + ControlChars.CrLf
+							     + "     , TABLE_NAME                 " + ControlChars.CrLf
+							     + "     , VIEW_NAME                  " + ControlChars.CrLf
+							     + "     , MODULE_SPECIFIC            " + ControlChars.CrLf
+							     + "     , MODULE_FIELD_NAME          " + ControlChars.CrLf
+							     + "     , IS_ASSIGNED                " + ControlChars.CrLf
+							     + "     , ASSIGNED_FIELD_NAME        " + ControlChars.CrLf
+							     + "     , HAS_CUSTOM                 " + ControlChars.CrLf
+							     + "     , IS_RELATIONSHIP            " + ControlChars.CrLf
+							     + "     , MODULE_NAME_RELATED        " + ControlChars.CrLf
+							     + "  from vwSYSTEM_SYNC_TABLES       " + ControlChars.CrLf
+							     + " where TABLE_NAME = @TABLE_NAME   " + ControlChars.CrLf;
+							if ( bExcludeSystemTables )
+								sSQL += "   and IS_SYSTEM = 0              " + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								cmd.CommandTimeout = 0;
+								Sql.AddParameter(cmd, "@TABLE_NAME", sTABLE_NAME);
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									da.Fill(dt);
+									Session.SetTable("vwSYSTEM_SYNC_TABLES." + sTABLE_NAME, dt);
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
 				}
 			}
 			return dt;
@@ -3787,25 +6818,827 @@ namespace SplendidCRM
 			return dt;
 		}
 
+		public void ClearFavorites()
+		{
+			Session.Remove("vwSUGARFAVORITES_MyFavorites");
+			Session.Remove("vwSUGARFAVORITES_MyFavorites.React");
+		}
+
+		public DataTable Favorites()
+		{
+			DataTable dt = Session.GetTable("vwSUGARFAVORITES_MyFavorites");
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				try
+				{
+					// 11/17/2007 Paul.  New function to determine if user is authenticated. 
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL;
+							sSQL = "select *                           " + ControlChars.CrLf
+							     + "  from vwSUGARFAVORITES_MyFavorites" + ControlChars.CrLf
+							     + " where USER_ID = @USER_ID          " + ControlChars.CrLf
+							     + " order by ITEM_SUMMARY             " + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								Sql.AddParameter(cmd, "@USER_ID", Security.USER_ID);
+								
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									da.Fill(dt);
+									Session.SetTable("vwSUGARFAVORITES_MyFavorites", dt);
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 11/21/2005 Paul. Ignore error, but then we need to find a way to display the connection error. 
+					// The most likely failure here is a connection failure. 
+				}
+			}
+			return dt;
+		}
+
+		// 10/02/2016 Paul.  Favorites for use on Arctic theme. 
+		public DataView Favorites(string sMODULE_NAME)
+		{
+			DataTable dtFavorites = Favorites();
+			DataView vwFavorites = new DataView(dtFavorites);
+			// 02/08/2018 Paul.  We can only filter if there is data and there is only data if authenticated. 
+			if ( dtFavorites.Columns.Contains("MODULE_NAME") && !Sql.IsEmptyString(sMODULE_NAME) && sMODULE_NAME != "Home" )
+				vwFavorites.RowFilter = "MODULE_NAME = '" + sMODULE_NAME + "'";
+			return vwFavorites;
+		}
+
+		// 04/28/2019 Paul.  Flag to include Favorites and LastViewed for the React client. 
+		public Dictionary<string, object> GetAllFavorites()
+		{
+			Dictionary<string, object> objs = Cache.Get("vwSUGARFAVORITES_MyFavorites.React") as Dictionary<string, object>;
+			if ( objs == null )
+			{
+				objs = new Dictionary<string, object>();
+				try
+				{
+					if ( Security.IsAuthenticated() )
+					{
+						using ( DataTable dt = this.Favorites() )
+						{
+							DataView vw = new DataView(dt);
+							vw.Sort = "MODULE_NAME, ITEM_SUMMARY";
+							
+							string sLAST_MODULE = String.Empty;
+							List<object> arrLastModule = null;
+							foreach ( DataRowView row in vw )
+							{
+								string sMODULE_NAME  = Sql.ToString(row["MODULE_NAME" ]);
+								Guid   gITEM_ID      = Sql.ToGuid  (row["ITEM_ID"     ]);
+								string sITEM_SUMMARY = Sql.ToString(row["ITEM_SUMMARY"]);
+								if ( arrLastModule == null || sLAST_MODULE != sMODULE_NAME )
+								{
+									arrLastModule = new List<object>();
+									objs.Add(sMODULE_NAME, arrLastModule);
+									sLAST_MODULE = sMODULE_NAME;
+								}
+								Dictionary<string, object> obj = new Dictionary<string, object>();
+								obj["ID"  ] = gITEM_ID;
+								obj["NAME"] = sITEM_SUMMARY;
+								arrLastModule.Add(obj);
+							}
+							Cache.Set("vwSUGARFAVORITES_MyFavorites.ReactClient", objs, DefaultCacheExpiration());
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					// 04/28/2019 Paul.  This error is not critical, so we can just log and ignore. 
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return objs;
+		}
+
+		// 10/09/2015 Paul.  Add support for subscriptions. 
+		public void ClearSubscriptions()
+		{
+			Session.Remove("vwSUBSCRIPTIONS_MySubscriptions");
+		}
+
+		public DataTable Subscriptions()
+		{
+			DataTable dt = Session.GetTable("vwSUBSCRIPTIONS_MySubscriptions");
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				try
+				{
+					// 11/17/2007 Paul.  New function to determine if user is authenticated. 
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL;
+							sSQL = "select *                              " + ControlChars.CrLf
+							     + "  from vwSUBSCRIPTIONS                " + ControlChars.CrLf
+							     + " where SUBSCRIPTION_USER_ID = @USER_ID" + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								Sql.AddParameter(cmd, "@USER_ID", Security.USER_ID);
+								
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									da.Fill(dt);
+									Session.SetTable("vwSUBSCRIPTIONS_MySubscriptions", dt);
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 11/21/2005 Paul. Ignore error, but then we need to find a way to display the connection error. 
+					// The most likely failure here is a connection failure. 
+				}
+			}
+			return dt;
+		}
+
+
+		// 09/10/2012 Paul.  Add User Signatures. 
+		public void ClearUserSignatures()
+		{
+			Session.Remove("vwUSERS_SIGNATURES");
+		}
+
+		// 09/10/2012 Paul.  Add User Signatures. 
+		public DataTable UserSignatures()
+		{
+			DataTable dt = Session.GetTable("vwUSERS_SIGNATURES");
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				try
+				{
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL;
+							// 05/03/2020 Paul.  The React Client needs the PRIMARY_SIGNATURE. 
+							sSQL = "select ID                             " + ControlChars.CrLf
+							     + "     , NAME                           " + ControlChars.CrLf
+							     + "     , SIGNATURE_HTML                 " + ControlChars.CrLf
+							     + "     , PRIMARY_SIGNATURE              " + ControlChars.CrLf
+							     + "  from vwUSERS_SIGNATURES             " + ControlChars.CrLf
+							     + " where USER_ID = @USER_ID             " + ControlChars.CrLf
+							     + " order by PRIMARY_SIGNATURE desc, NAME" + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								Sql.AddParameter(cmd, "@USER_ID", Security.USER_ID);
+								
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									da.Fill(dt);
+									Session.SetTable("vwUSERS_SIGNATURES", dt);
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 05/03/2020 Paul.  Emails.EditView should use cached list of signatures. 
+		public Dictionary<string, object> GetUserSignatures()
+		{
+			Dictionary<string, object> objs = new Dictionary<string, object>();
+			try
+			{
+				if ( Security.IsAuthenticated() )
+				{
+					DataTable dt = UserSignatures();
+					foreach ( DataRow row in dt.Rows )
+					{
+						Guid   gID                = Sql.ToGuid   (row["ID"               ]);
+						string sNAME              = Sql.ToString (row["NAME"             ]);
+						string sSIGNATURE_HTML    = Sql.ToString (row["SIGNATURE_HTML"   ]);
+						bool   bPRIMARY_SIGNATURE = Sql.ToBoolean(row["PRIMARY_SIGNATURE"]);
+						Dictionary<string, object> obj = new Dictionary<string, object>();
+						obj["ID"               ] = gID               ;
+						obj["NAME"             ] = sNAME             ;
+						obj["SIGNATURE_HTML"   ] = sSIGNATURE_HTML   ;
+						obj["PRIMARY_SIGNATURE"] = bPRIMARY_SIGNATURE;
+						objs.Add(gID.ToString(), obj);
+					}
+				}
+			}
+			catch(Exception ex)
+			{
+				SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				throw;
+			}
+			return objs;
+		}
+
+		// 07/18/2013 Paul.  Add support for multiple outbound emails. 
+		// 04/20/2016 Paul.  Add team management to Outbound Emails. 
+		public void ClearOutboundMail()
+		{
+			foreach(string sKey in GetCacheKeys())
+			{
+				if ( sKey.StartsWith("vwOUTBOUND_EMAILS") )
+					Cache.Remove(sKey);
+			}
+		}
+
+		// 07/18/2013 Paul.  Add support for multiple outbound emails. 
+		// 04/20/2016 Paul.  Add team management to Outbound Emails. 
+		public DataTable OutboundMail()
+		{
+			Guid gUSER_ID = Security.USER_ID;
+			// 02/09/2017 Paul.  Change from Session to global cache. 
+			//HttpSessionState Session = HttpContext.Current.Session;
+			//DataTable dt = Session["vwOUTBOUND_EMAILS." + gUSER_ID.ToString()] as DataTable;
+			DataTable dt = Cache.Get("vwOUTBOUND_EMAILS." + gUSER_ID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				try
+				{
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL;
+							// 01/17/2017 Paul.  Get all fields. 
+							sSQL = "select *                " + ControlChars.CrLf
+							     + "  from vwOUTBOUND_EMAILS" + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								// 04/20/2016 Paul.  Add team management to Outbound Emails. 
+								// 04/20/2016 Paul.  We are not going to use the default filter as the Require Team flag can dramatically change the behavior. 
+								// We want old records with null TEAM_ID to still be accessible, so we must use the left outer join. 
+								//Security.Filter(cmd, "OutboundEmail", "list");
+								bool bEnableTeamManagement  = Config.enable_team_management();
+								bool bEnableDynamicTeams    = Config.enable_dynamic_teams();
+								if ( bEnableTeamManagement )
+								{
+									if ( bEnableDynamicTeams )
+									{
+										cmd.CommandText += "  left outer join " + Sql.MetadataName(cmd, "vwTEAM_SET_MEMBERSHIPS_Security") + " vwTEAM_SET_MEMBERSHIPS" + ControlChars.CrLf;
+										cmd.CommandText += "               on vwTEAM_SET_MEMBERSHIPS.MEMBERSHIP_TEAM_SET_ID = TEAM_SET_ID        " + ControlChars.CrLf;
+										cmd.CommandText += "              and vwTEAM_SET_MEMBERSHIPS.MEMBERSHIP_USER_ID     = @MEMBERSHIP_USER_ID" + ControlChars.CrLf;
+									}
+									else
+									{
+										cmd.CommandText += "  left outer join vwTEAM_MEMBERSHIPS" + ControlChars.CrLf;
+										cmd.CommandText += "               on vwTEAM_MEMBERSHIPS.MEMBERSHIP_TEAM_ID = TEAM_ID            " + ControlChars.CrLf;
+										cmd.CommandText += "              and vwTEAM_MEMBERSHIPS.MEMBERSHIP_USER_ID = @MEMBERSHIP_USER_ID" + ControlChars.CrLf;
+									}
+									Sql.AddParameter(cmd, "@MEMBERSHIP_USER_ID", Security.USER_ID);
+								}
+								cmd.CommandText += " where 1 = 1" + ControlChars.CrLf;
+								if ( bEnableTeamManagement )
+								{
+									if ( bEnableDynamicTeams )
+										cmd.CommandText += "   and (TEAM_SET_ID is null or vwTEAM_SET_MEMBERSHIPS.MEMBERSHIP_TEAM_SET_ID is not null)" + ControlChars.CrLf;
+									else
+										cmd.CommandText += "   and (TEAM_ID is null or vwTEAM_MEMBERSHIPS.MEMBERSHIP_TEAM_ID is not null)" + ControlChars.CrLf;
+								}
+								cmd.CommandText += "   and (USER_ID = @USER_ID or USER_ID is null)" + ControlChars.CrLf;
+								Sql.AddParameter(cmd, "@USER_ID", gUSER_ID);
+								cmd.CommandText += " order by USER_ID desc, DISPLAY_NAME  " + ControlChars.CrLf;
+								
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									da.Fill(dt);
+									// 02/09/2017 Paul.  Change from Session to global cache. 
+									//Session["vwOUTBOUND_EMAILS." + gUSER_ID.ToString()] = dt;
+									Cache.Set("vwOUTBOUND_EMAILS." + gUSER_ID.ToString(), dt, DefaultCacheExpiration());
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 05/05/2020 Paul.  Emails.EditView should use cached list of OutboundMail. 
+		public Dictionary<string, object> GetOutboundMail()
+		{
+			Dictionary<string, object> objs = new Dictionary<string, object>();
+			try
+			{
+				if ( Security.IsAuthenticated() )
+				{
+					DataTable dt = OutboundMail();
+					foreach ( DataRow row in dt.Rows )
+					{
+						Guid   gID                       = Sql.ToGuid   (row["ID"                      ]);
+						string sNAME                     = Sql.ToString (row["NAME"                    ]);
+						string sDISPLAY_NAME             = Sql.ToString (row["DISPLAY_NAME"            ]);
+						string sTYPE                     = Sql.ToString (row["TYPE"                    ]);
+						string sFROM_NAME                = Sql.ToString (row["FROM_NAME"               ]);
+						string sFROM_ADDR                = Sql.ToString (row["FROM_ADDR"               ]);
+						bool   bOFFICE365_OAUTH_ENABLED  = Sql.ToBoolean(row["OFFICE365_OAUTH_ENABLED" ]);
+						bool   bGOOGLEAPPS_OAUTH_ENABLED = Sql.ToBoolean(row["GOOGLEAPPS_OAUTH_ENABLED"]);
+						Dictionary<string, object> obj = new Dictionary<string, object>();
+						obj["ID"                      ] = gID                      ;
+						obj["NAME"                    ] = sNAME                    ;
+						obj["DISPLAY_NAME"            ] = sDISPLAY_NAME            ;
+						obj["TYPE"                    ] = sTYPE                    ;
+						obj["FROM_NAME"               ] = sFROM_NAME               ;
+						obj["FROM_ADDR"               ] = sFROM_ADDR               ;
+						obj["OFFICE365_OAUTH_ENABLED" ] = bOFFICE365_OAUTH_ENABLED ;
+						obj["GOOGLEAPPS_OAUTH_ENABLED"] = bGOOGLEAPPS_OAUTH_ENABLED;
+						objs.Add(gID.ToString(), obj);
+					}
+				}
+			}
+			catch(Exception ex)
+			{
+				SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				throw;
+			}
+			return objs;
+		}
+
+		// 09/23/2013 Paul.  Add support for multiple outbound sms. 
+		public void ClearOutboundSms()
+		{
+			Session.Remove("vwOUTBOUND_SMS");
+		}
+
+		// 09/23/2013 Paul.  Add support for multiple outbound sms. 
+		public DataTable OutboundSms()
+		{
+			DataTable dt = Session.GetTable("vwOUTBOUND_SMS") as DataTable;
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				try
+				{
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL;
+							sSQL = "select ID                           " + ControlChars.CrLf
+							     + "     , NAME                         " + ControlChars.CrLf
+							     + "     , FROM_NUMBER                  " + ControlChars.CrLf
+							     + "     , DISPLAY_NAME                 " + ControlChars.CrLf
+							     + "  from vwOUTBOUND_SMS               " + ControlChars.CrLf
+							     + " where USER_ID = @USER_ID           " + ControlChars.CrLf
+							     + "    or USER_ID is null              " + ControlChars.CrLf
+							     + " order by USER_ID desc, DISPLAY_NAME" + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								Sql.AddParameter(cmd, "@USER_ID", Security.USER_ID);
+								
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									da.Fill(dt);
+									Session.SetTable("vwOUTBOUND_SMS", dt);
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		// 05/05/2020 Paul.  Emails.EditView should use cached list of OutboundMail. 
+		public Dictionary<string, object> GetOutboundSms()
+		{
+			Dictionary<string, object> objs = new Dictionary<string, object>();
+			try
+			{
+				if ( Security.IsAuthenticated() )
+				{
+					DataTable dt = OutboundSms();
+					foreach ( DataRow row in dt.Rows )
+					{
+						Guid   gID           = Sql.ToGuid   (row["ID"          ]);
+						string sNAME         = Sql.ToString (row["NAME"        ]);
+						string sDISPLAY_NAME = Sql.ToString (row["DISPLAY_NAME"]);
+						string sFROM_NUMBER  = Sql.ToString (row["FROM_NUMBER" ]);
+						Dictionary<string, object> obj = new Dictionary<string, object>();
+						obj["ID"          ] = gID          ;
+						obj["NAME"        ] = sNAME        ;
+						obj["DISPLAY_NAME"] = sDISPLAY_NAME;
+						obj["FROM_NUMBER" ] = sFROM_NUMBER ;
+						objs.Add(gID.ToString(), obj);
+					}
+				}
+			}
+			catch(Exception ex)
+			{
+				SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				throw;
+			}
+			return objs;
+		}
+
+		// 12/24/2012 Paul.  Cache the activity reminders for 5 minutes. 
+		public void ClearUserReminders()
+		{
+			Cache.Remove("vwACTIVITIES_Reminders." + Security.USER_ID.ToString());
+		}
+
+		// 12/24/2012 Paul.  Cache the activity reminders for 5 minutes. 
+		public DataTable UserReminders()
+		{
+			DataTable dt = Cache.Get("vwACTIVITIES_Reminders." + Security.USER_ID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						// 12/25/2012 Paul.  Date math is handled by the view. 
+						sSQL = "select *                     " + ControlChars.CrLf
+						     + "  from vwACTIVITIES_Reminders" + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							// 06/02/2016 Paul.  Activities views will use new function that accepts an array of modules. 
+							// 06/09/2017 Paul.  We need to include tasks. 
+							// 12/03/2017 Paul.  Module name field needs to be a parameter because it can change between MODULE_NAME and ACTIVITY_TYPE. 
+							Security.Filter(cmd, new string[] {"Calls", "Meetings", "Tasks"}, "list", "ASSIGNED_USER_ID", "ACTIVITY_TYPE");
+							Sql.AppendParameter(cmd, Security.USER_ID, "USER_ID");
+							cmd.CommandText += " order by DATE_START" + ControlChars.CrLf;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwACTIVITIES_Reminders." + Security.USER_ID.ToString(), dt, CacheExpiration5Minutes());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		public void ClearTwitterTracks()
+		{
+			Session.Remove("vwTWITTER_TRACKS");
+			Cache.Remove("vwTWITTER_TRACKS");
+		}
+
+		// 10/26/2013 Paul.  Add TwitterTrackers to the cache. 
+		public string MyTwitterTracks()
+		{
+			if ( Session["vwTWITTER_TRACKS"] == null )
+			{
+				try
+				{
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL;
+							sSQL = "select distinct NAME              " + ControlChars.CrLf
+							     + "  from vwTWITTER_TRACKS_Active    " + ControlChars.CrLf
+							     + " where ASSIGNED_USER_ID = @USER_ID" + ControlChars.CrLf
+							     + " order by NAME                    " + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								Sql.AddParameter(cmd, "@USER_ID", Security.USER_ID);
+								
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									using ( DataTable dt = new DataTable() )
+									{
+										da.Fill(dt);
+										// 10/27/2013 Paul.  Prebuild the tracks string so that a page request is fast. 
+										StringBuilder sbTracks = new StringBuilder();
+										if ( dt != null && dt.Rows.Count > 0 )
+										{
+											foreach ( DataRow row in dt.Rows )
+											{
+												string sNAME = Sql.ToString(row["NAME"]);
+												if ( !Sql.IsEmptyString(sNAME) )
+												{
+													if ( sbTracks.Length > 0 )
+														sbTracks.Append(',');
+													// 10/27/2013 Paul.  The Twitter events are mapped in lowercase, make lowercase in advance. 
+													sbTracks.Append(sNAME.ToLower());
+												}
+											}
+										}
+										Session["vwTWITTER_TRACKS"] = sbTracks.ToString();
+									}
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return Sql.ToString(Session["vwTWITTER_TRACKS"]);
+		}
+
+		public DataTable TwitterTracks(HttpApplicationState Application)
+		{
+			DataTable dt = Cache.Get("vwTWITTER_TRACKS") as DataTable;
+			if ( dt == null )
+			{
+				dt = new DataTable();
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select NAME                   " + ControlChars.CrLf
+						     + "     , TYPE                   " + ControlChars.CrLf
+						     + "  from vwTWITTER_TRACKS_Active" + ControlChars.CrLf
+						     + " order by NAME                " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								da.Fill(dt);
+								Cache.Set("vwTWITTER_TRACKS", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		public void ClearChatChannels()
+		{
+			Session.Remove("vwCHAT_CHANNELS");
+			Cache.Remove("vwCHAT_CHANNELS");
+		}
+
+		// 11/10/2014 Paul.  Add ChatChannels to the cache. 
+		public string MyChatChannels()
+		{
+			if ( Session["vwCHAT_CHANNELS"] == null )
+			{
+				try
+				{
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL;
+							sSQL = "select ID             " + ControlChars.CrLf
+							     + "  from vwCHAT_CHANNELS" + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								Security.Filter(cmd, "ChatChannels", "list");
+								
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									using ( DataTable dt = new DataTable() )
+									{
+										da.Fill(dt);
+										StringBuilder sbChannels = new StringBuilder();
+										if ( dt != null && dt.Rows.Count > 0 )
+										{
+											foreach ( DataRow row in dt.Rows )
+											{
+												Guid gID = Sql.ToGuid(row["ID"]);
+												if ( sbChannels.Length > 0 )
+													sbChannels.Append(',');
+												sbChannels.Append(gID.ToString());
+											}
+										}
+										Session["vwCHAT_CHANNELS"] = sbChannels.ToString();
+									}
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return Sql.ToString(Session["vwCHAT_CHANNELS"]);
+		}
+
+		// 12/12/2015 Paul.  /n Software and .netCharge use different lists. 
+		public DataTable LibraryPaymentGateways()
+		{
+			string sLibraryListName = "payment_gateway_dom";
+			// dotnetCharge.dll or nsoftware.InPayWeb.dll. 
+			if ( Sql.ToString(Application["CONFIG.PaymentGateway.Library"]) == "nsoftware.InPayWeb" )
+				sLibraryListName = "payment_gateway_nsoftware";
+			DataTable dt = Cache.Get("vwAPI_PAYMENT_GATEWAYS." + sLibraryListName) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select NAME                         " + ControlChars.CrLf
+						     + "     , DISPLAY_NAME                 " + ControlChars.CrLf
+						     + "  from vwTERMINOLOGY                " + ControlChars.CrLf
+						     + " where lower(LIST_NAME) = @LIST_NAME" + ControlChars.CrLf
+						     + "   and lower(LANG     ) = @LANG     " + ControlChars.CrLf
+						     + " order by LIST_ORDER                " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							Sql.AddParameter(cmd, "@LIST_NAME", sLibraryListName);
+							// 12/12/2015 Paul.  Use the english list as the primary location. 
+							Sql.AddParameter(cmd, "@LANG"     , "en-us");
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwAPI_PAYMENT_GATEWAYS." + sLibraryListName, dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		// 12/16/2015 Paul.  credit_card_year should be a custom list that adds 10 years to current year. 
+		public DataTable CreditCardYears()
+		{
+			DataTable dt = Cache.Get(".credit_card_year") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					dt = new DataTable();
+					dt.Columns.Add("NAME"        );
+					dt.Columns.Add("DISPLAY_NAME");
+					for ( int i = DateTime.Today.Year - 1; i <  DateTime.Today.Year + 10; i++ )
+					{
+						DataRow row = dt.NewRow();
+						dt.Rows.Add(row);
+						row["NAME"        ] = i.ToString();
+						row["DISPLAY_NAME"] = i.ToString();
+					}
+					Cache.Set(".credit_card_year", dt, DefaultCacheExpiration());
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					// 10/16/2005 Paul. Ignore list errors. 
+				}
+			}
+			return dt;
+		}
+
+		public DataTable StreamModules(Guid gUSER_ID)
+		{
+			DataTable dt = Cache.Get(L10n.NAME + ".vwMODULES_Stream_ByUser_" + gUSER_ID.ToString()) as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select MODULE_NAME             " + ControlChars.CrLf
+						     + "     , DISPLAY_NAME            " + ControlChars.CrLf
+						     + "  from vwMODULES_Stream_ByUser " + ControlChars.CrLf
+						     + " where USER_ID = @USER_ID      " + ControlChars.CrLf
+						     + " order by MODULE_NAME          " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							Sql.AddParameter(cmd, "@USER_ID", gUSER_ID);
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								foreach ( DataRow row in dt.Rows )
+								{
+									row["DISPLAY_NAME"] = L10n.Term(Sql.ToString(row["DISPLAY_NAME"]));
+								}
+								Cache.Set(L10n.NAME + ".vwMODULES_Stream_ByUser_" + gUSER_ID.ToString(), dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
+		public List<string> StreamModulesArray(Guid gUSER_ID)
+		{
+			List<string> arr = new List<string>();
+			DataTable dt = StreamModules(gUSER_ID);
+			foreach ( DataRow row in dt.Rows )
+			{
+				string sMODULE_NAME = Sql.ToString(row["MODULE_NAME"]);
+				arr.Add(sMODULE_NAME);
+			}
+			return arr;
+		}
+
 		// 10/05/2017 Paul.  Add Archive relationship view. 
 		public void ClearArchiveViewExists()
 		{
-// 12/16/2021 TODO.  Clear memorycache of set of items. 
-#if !SplendidApp
-			foreach(DictionaryEntry oKey in Cache)
+			foreach(string sKey in GetCacheKeys())
 			{
-				string sKey = oKey.Key.ToString();
-				if ( sKey.StartsWith("ArchiveExists.") )
-					memoryCache.Remove(sKey);
+				if ( sKey.StartsWith("ArchiveViewExists.") )
+					Cache.Remove(sKey);
 			}
-#endif
 		}
 
 		// 10/05/2017 Paul.  Add Archive relationship view. 
 		public bool ArchiveViewExists(string sVIEW_NAME)
 		{
 			string sARCHIVE_VIEW = sVIEW_NAME + "_ARCHIVE";
-			object oExists = memoryCache.Get("ArchiveViewExists." + sARCHIVE_VIEW);
+			object oExists = Cache.Get("ArchiveViewExists." + sARCHIVE_VIEW);
 			if ( oExists == null )
 			{
 				try
@@ -3823,7 +7656,7 @@ namespace SplendidCRM
 							cmd.CommandText = sSQL;
 							Sql.AddParameter(cmd, "@VIEW_NAME", Sql.MetadataName(con, sARCHIVE_VIEW));
 							oExists = Sql.ToBoolean(cmd.ExecuteScalar());
-							memoryCache.Set("ArchiveViewExists." + sARCHIVE_VIEW, oExists, DefaultCacheExpiration());
+							Cache.Set("ArchiveViewExists." + sARCHIVE_VIEW, oExists, DefaultCacheExpiration());
 						}
 					}
 				}
@@ -3835,13 +7668,62 @@ namespace SplendidCRM
 			return Sql.ToBoolean(oExists);
 		}
 
+		// 06/27/2018 Paul.  Add ERASED_FIELDS when data privacy enabled. 
+		public DataTable DataPrivacyFields()
+		{
+			L10N L10n = new L10N(Session["USER_SETTINGS/CULTURE"] as string);
+			DataTable dt = Cache.Get(L10n.NAME + "." + "vwDATA_PRIVACY_FIELDS") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select MODULE_NAME               " + ControlChars.CrLf
+						     + "     , FIELD_NAME                " + ControlChars.CrLf
+						     + "  from vwDATA_PRIVACY_FIELDS     " + ControlChars.CrLf
+						     + " order by MODULE_NAME, FIELD_NAME" + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								dt.Columns.Add("NAME"        , Type.GetType("System.String"));
+								dt.Columns.Add("DISPLAY_NAME", Type.GetType("System.String"));
+								foreach ( DataRow row in dt.Rows )
+								{
+									string sMODULE_NAME = Sql.ToString(row["MODULE_NAME"]);
+									string sDISPLAY_NAME = L10n.Term(sMODULE_NAME + ".LBL_" + Sql.ToString(row["FIELD_NAME"]));
+									sDISPLAY_NAME = sDISPLAY_NAME.Replace(":", String.Empty);
+									row["NAME"        ] = sMODULE_NAME + "." + Sql.ToString(row["FIELD_NAME"]);
+									row["DISPLAY_NAME"] = L10n.Term(".moduleList." + sMODULE_NAME) + sDISPLAY_NAME;
+								}
+								Cache.Set(L10n.NAME + "." + "vwDATA_PRIVACY_FIELDS", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemMessage("Error", new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
 		#region REST API helpers
 		// 02/22/2021 Paul.  The React client needs a way to determine the default sort, besides NAME asc. 
 		public Dictionary<string, object> GetAllGridViews(List<string> lstMODULES)
 		{
 			// 08/09/2020 Paul.  Convert to comma separated string. 
 			string sModuleList = String.Join(",", lstMODULES.ToArray());
-			Dictionary<string, object> objs = memoryCache.Get("vwGRIDVIEWS.ReactClient." + sModuleList) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwGRIDVIEWS.ReactClient." + sModuleList) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -3896,7 +7778,7 @@ namespace SplendidCRM
 											}
 											objs.Add(sGRID_NAME, drow);
 										}
-										memoryCache.Set("vwGRIDVIEWS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
+										Cache.Set("vwGRIDVIEWS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -3917,7 +7799,7 @@ namespace SplendidCRM
 		{
 			// 08/09/2020 Paul.  Convert to comma separated string. 
 			string sModuleList = String.Join(",", lstMODULES.ToArray());
-			Dictionary<string, object> objs = memoryCache.Get("vwGRIDVIEWS_COLUMNS.ReactClient." + sModuleList) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwGRIDVIEWS_COLUMNS.ReactClient." + sModuleList) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -4006,7 +7888,7 @@ namespace SplendidCRM
 												layout.Add(drow);
 											}
 										}
-										memoryCache.Set("vwGRIDVIEWS_COLUMNS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
+										Cache.Set("vwGRIDVIEWS_COLUMNS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -4027,7 +7909,7 @@ namespace SplendidCRM
 		{
 			// 08/09/2020 Paul.  Convert to comma separated string. 
 			string sModuleList = String.Join(",", lstMODULES.ToArray());
-			Dictionary<string, object> objs = memoryCache.Get("vwDETAILVIEWS_FIELDS.ReactClient." + sModuleList) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwDETAILVIEWS_FIELDS.ReactClient." + sModuleList) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -4104,7 +7986,7 @@ namespace SplendidCRM
 												layout.Add(drow);
 											}
 										}
-										memoryCache.Set("vwDETAILVIEWS_FIELDS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
+										Cache.Set("vwDETAILVIEWS_FIELDS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -4125,7 +8007,7 @@ namespace SplendidCRM
 		{
 			// 08/09/2020 Paul.  Convert to comma separated string. 
 			string sModuleList = String.Join(",", lstMODULES.ToArray());
-			Dictionary<string, object> objs = memoryCache.Get("vwEDITVIEWS_FIELDS.ReactClient." + sModuleList) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwEDITVIEWS_FIELDS.ReactClient." + sModuleList) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -4216,7 +8098,7 @@ namespace SplendidCRM
 											}
 											layout.Add(drow);
 										}
-										memoryCache.Set("vwEDITVIEWS_FIELDS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
+										Cache.Set("vwEDITVIEWS_FIELDS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -4237,7 +8119,7 @@ namespace SplendidCRM
 		{
 			// 08/09/2020 Paul.  Convert to comma separated string. 
 			string sModuleList = String.Join(",", lstMODULES.ToArray());
-			Dictionary<string, object> objs = memoryCache.Get("vwDETAILVIEWS_RELATIONSHIPS.ReactClient." + sModuleList) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwDETAILVIEWS_RELATIONSHIPS.ReactClient." + sModuleList) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -4302,7 +8184,7 @@ namespace SplendidCRM
 												layout.Add(drow);
 											}
 										}
-										memoryCache.Set("vwDETAILVIEWS_RELATIONSHIPS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
+										Cache.Set("vwDETAILVIEWS_RELATIONSHIPS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -4323,7 +8205,7 @@ namespace SplendidCRM
 		{
 			// 08/09/2020 Paul.  Convert to comma separated string. 
 			string sModuleList = String.Join(",", lstMODULES.ToArray());
-			Dictionary<string, object> objs = memoryCache.Get("vwEDITVIEWS_RELATIONSHIPS.ReactClient." + sModuleList) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwEDITVIEWS_RELATIONSHIPS.ReactClient." + sModuleList) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -4382,7 +8264,7 @@ namespace SplendidCRM
 												layout.Add(drow);
 											}
 										}
-										memoryCache.Set("vwEDITVIEWS_RELATIONSHIPS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
+										Cache.Set("vwEDITVIEWS_RELATIONSHIPS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -4403,7 +8285,7 @@ namespace SplendidCRM
 		{
 			// 08/09/2020 Paul.  Convert to comma separated string. 
 			string sModuleList = String.Join(",", lstMODULES.ToArray());
-			Dictionary<string, object> objs = memoryCache.Get("vwDYNAMIC_BUTTONS.ReactClient." + sModuleList) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwDYNAMIC_BUTTONS.ReactClient." + sModuleList) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -4497,7 +8379,7 @@ namespace SplendidCRM
 												layout.Add(drow);
 											}
 										}
-										memoryCache.Set("vwDYNAMIC_BUTTONS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
+										Cache.Set("vwDYNAMIC_BUTTONS.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -4526,7 +8408,7 @@ namespace SplendidCRM
 			lstMODULES_WithAdmin.Add("SavedSearch");
 			
 			string sModuleList = lstMODULES_WithAdmin.ToString();
-			Dictionary<string, object> objs = memoryCache.Get("vwSHORTCUTS_Menu_ByUser.ReactClient." + sModuleList) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwSHORTCUTS_Menu_ByUser.ReactClient." + sModuleList) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -4579,7 +8461,7 @@ namespace SplendidCRM
 												layout.Add(drow);
 											}
 										}
-										memoryCache.Set("vwSHORTCUTS_Menu_ByUser.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
+										Cache.Set("vwSHORTCUTS_Menu_ByUser.ReactClient." + sModuleList, objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -4601,7 +8483,7 @@ namespace SplendidCRM
 		public Dictionary<string, object> GetAllTerminology(List<string> lstMODULES, bool bAdmin)
 		{
 			// 09/27/2020 Paul.  Terminology is language specific. 
-			Dictionary<string, object> objs = memoryCache.Get("vwTERMINOLOGY.ReactClient." + L10n.NAME + (bAdmin ? ".Admin": "")) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwTERMINOLOGY.ReactClient." + L10n.NAME + (bAdmin ? ".Admin": "")) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -4614,6 +8496,8 @@ namespace SplendidCRM
 						List<string> lstMODULES_WithAdmin = new List<string>(lstMODULES);
 						// 06/07/2020 Paul.  Home is always available. 
 						lstMODULES_WithAdmin.Add("Home"           );
+						// 10/05/2022 Paul.  Merge is always available. 
+						lstMODULES_WithAdmin.Add("Merge"          );
 						lstMODULES_WithAdmin.Add("Users"          );
 						lstMODULES_WithAdmin.Add("Audit"          );
 						lstMODULES_WithAdmin.Add("OAuth"          );
@@ -4732,6 +8616,32 @@ namespace SplendidCRM
 											objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
 										}
 									}
+									using ( DataTable dt = this.Release() )
+									{
+										string sLIST_NAME = "Release";
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID           = Sql.ToString(row["ID"  ]);
+											string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+											objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+										}
+									}
+									// 12/18/2017 Paul.  Order modules will not exist on Community Edition. 
+									if ( Sql.ToBoolean(Application["Modules.ContractTypes.RestEnabled"]) )
+									{
+										using ( DataTable dt = this.ContractTypes() )
+										{
+											string sLIST_NAME = "ContractTypes";
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sID           = Sql.ToString(row["ID"  ]);
+												string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+											}
+										}
+									}
 									using ( DataTable dt = this.AssignedUser() )
 									{
 										string sLIST_NAME = "AssignedUser";
@@ -4841,6 +8751,84 @@ namespace SplendidCRM
 											}
 										}
 									}
+									// 02/28/2016 Paul.  Order management in html5. 
+									// 12/18/2017 Paul.  Order modules will not exist on Community Edition. 
+									if ( Sql.ToBoolean(Application["Modules.TaxRates.RestEnabled"]) )
+									{
+										using ( DataTable dt = this.TaxRates() )
+										{
+											string sLIST_NAME = "TaxRates";
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sID           = Sql.ToString(row["ID"  ]);
+												string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+											}
+										}
+									}
+									// 12/18/2017 Paul.  Order modules will not exist on Community Edition. 
+									if ( Sql.ToBoolean(Application["Modules.Shippers.RestEnabled"]) )
+									{
+										using ( DataTable dt = this.Shippers() )
+										{
+											string sLIST_NAME = "Shippers";
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sID           = Sql.ToString(row["ID"  ]);
+												string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+											}
+										}
+									}
+									// 12/18/2017 Paul.  Order modules will not exist on Community Edition. 
+									if ( Sql.ToBoolean(Application["Modules.Discounts.RestEnabled"]) )
+									{
+										using ( DataTable dt = this.Discounts() )
+										{
+											DataView vwDiscounts = new DataView(dt);
+											// 02/29/2016 Paul.  The Line Items Editor uses a reduced set of discounts. 
+											vwDiscounts.RowFilter = "PRICING_FORMULA in ('PercentageDiscount', 'FixedDiscount')";
+											string sLIST_NAME = "Discounts";
+											for ( int i = 0; i < vwDiscounts.Count; i++ )
+											{
+												DataRowView row = vwDiscounts[i];
+												string sID           = Sql.ToString(row["ID"  ]);
+												string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+											}
+										}
+									}
+									// 12/18/2017 Paul.  Order modules will not exist on Community Edition. 
+									if ( Sql.ToBoolean(Application["Modules.Quotes.RestEnabled"]) || Sql.ToBoolean(Application["Modules.Orders.RestEnabled"]) || Sql.ToBoolean(Application["Modules.Invoices.RestEnabled"]) )
+									{
+										using ( DataTable dt = this.List("pricing_formula_dom") )
+										{
+											DataView vwPricingFormulas = new DataView(dt);
+											// 02/29/2016 Paul.  The Line Items Editor uses a reduced set of pricing formulas. 
+											vwPricingFormulas.RowFilter = "NAME in ('PercentageDiscount', 'FixedDiscount')";
+											string sLIST_NAME = "pricing_formula_line_items";
+											for ( int i = 0; i < vwPricingFormulas.Count; i++ )
+											{
+												DataRowView row = vwPricingFormulas[i];
+												string sNAME         = Sql.ToString(row["NAME"        ]);
+												string sDISPLAY_NAME = Sql.ToString(row["DISPLAY_NAME"]);
+												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sNAME] = sDISPLAY_NAME;
+											}
+										}
+										using ( DataTable dt = this.PaymentTerms() )
+										{
+											string sLIST_NAME = "PaymentTerms";
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sID           = Sql.ToString(row["ID"  ]);
+												string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+											}
+										}
+									}
 									// 08/19/2019 Paul.  Modules are used by the ReportDesigner, so it is a non-admin list. 
 									using ( DataTable dt = this.Modules() )
 									{
@@ -4853,9 +8841,157 @@ namespace SplendidCRM
 											objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sNAME] = sDISPLAY_NAME;
 										}
 									}
+									// 04/15/2021 Paul.  RulesModules is used by Business Rules module. 
+									using ( DataTable dt = this.RulesModules() )
+									{
+										string sLIST_NAME = "RulesModules";
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sMODULE_NAME  = Sql.ToString(row["MODULE_NAME" ]);
+											string sDISPLAY_NAME = Sql.ToString(row["DISPLAY_NAME"]);
+											// 05/07/2021 Paul.  Prefilter the list to only those modules that can be edited. 
+											if ( Security.GetUserAccess(sMODULE_NAME, "edit") >= 0 )
+												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sMODULE_NAME] = sDISPLAY_NAME;
+										}
+										// 03/29/2012 Paul.  Add Rules Wizard support to Terminology module. 
+										if ( Security.IS_ADMIN )
+										{
+											objs[L10n.NAME + "." + "." + sLIST_NAME + "." + "Terminology"] = L10n.Term(".moduleList.Terminology");
+										}
+									}
+									// 05/01/2020 Paul.  Provide Email Templates to the React Client. 
+									using ( DataTable dt = this.EmailTemplates() )
+									{
+										string sLIST_NAME = "EmailTemplates";
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID           = Sql.ToString(row["ID"  ]);
+											string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+											objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+										}
+									}
+									// 05/01/2020 Paul.  Provide User Signatures to the React Client. 
+									using ( DataTable dt = this.UserSignatures() )
+									{
+										string sLIST_NAME = "UserSignatures";
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID           = Sql.ToString(row["ID"  ]);
+											string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+											objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+										}
+									}
+									// 05/01/2020 Paul.  Provide User Mailboxes to the React Client. 
+									// 01/24/2021 Paul.  Use OutboundMail DISPLAY_NAME. 
+									using ( DataTable dt = this.OutboundMail() )
+									{
+										string sLIST_NAME = "OutboundMail";
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID           = Sql.ToString(row["ID"  ]);
+											string sDISPLAY_NAME = Sql.ToString(row["DISPLAY_NAME"]);
+											objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+										}
+									}
+									// 04/18/2022 Paul.  EmailMarketing requires InboundEmailBounce list. 
+									using ( DataTable dt = this.InboundEmailBounce() )
+									{
+										string sLIST_NAME = "InboundEmailBounce";
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID           = Sql.ToString(row["ID"  ]);
+											string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+											objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+										}
+									}
+									// 01/24/2021 Paul.  Add OutboundSms. 
+									using ( DataTable dt = this.OutboundSms() )
+									{
+										string sLIST_NAME = "OutboundSms";
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID           = Sql.ToString(row["ID"  ]);
+											string sDISPLAY_NAME = Sql.ToString(row["DISPLAY_NAME"]);
+											objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+										}
+									}
+									// 12/17/2020 Paul.  Provide ReportingModules to the React Client. 
+									using ( DataTable dt = this.ReportingModules() )
+									{
+										string sLIST_NAME = "ReportingModules";
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID           = Sql.ToString(row["MODULE_NAME" ]);
+											string sDISPLAY_NAME = Sql.ToString(row["DISPLAY_NAME"]);
+											objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+										}
+									}
 									// 03/26/2019 Paul.  Admin has more custom lists. 
 									if ( bAdmin )
 									{
+										// 06/29/2020 Paul.  Order modules will not exist on Community Edition. 
+										if ( Sql.ToBoolean(Application["Modules.Manufacturers.RestEnabled"]) || Sql.ToBoolean(Application["Modules.ProductTemplates.RestEnabled"]) )
+										{
+											using ( DataTable dt = this.Manufacturers() )
+											{
+												string sLIST_NAME = "Manufacturers";
+												for ( int i = 0; i < dt.Rows.Count; i++ )
+												{
+													DataRow row = dt.Rows[i];
+													string sNAME         = Sql.ToString(row["ID"  ]);
+													string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+													objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sNAME] = sDISPLAY_NAME;
+												}
+											}
+										}
+										// 06/29/2020 Paul.  Order modules will not exist on Community Edition. 
+										if ( Sql.ToBoolean(Application["Modules.ProductTypes.RestEnabled"]) || Sql.ToBoolean(Application["Modules.ProductTemplates.RestEnabled"]) )
+										{
+											using ( DataTable dt = this.ProductTypes() )
+											{
+												string sLIST_NAME = "ProductTypes";
+												for ( int i = 0; i < dt.Rows.Count; i++ )
+												{
+													DataRow row = dt.Rows[i];
+													string sNAME         = Sql.ToString(row["ID"  ]);
+													string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+													objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sNAME] = sDISPLAY_NAME;
+												}
+											}
+										}
+										// 06/29/2020 Paul.  Order modules will not exist on Community Edition. 
+										if ( Sql.ToBoolean(Application["Modules.ProductCategories.RestEnabled"]) || Sql.ToBoolean(Application["Modules.ProductTemplates.RestEnabled"]) )
+										{
+											using ( DataTable dt = this.ProductCategories() )
+											{
+												string sLIST_NAME = "ProductCategories";
+												for ( int i = 0; i < dt.Rows.Count; i++ )
+												{
+													DataRow row = dt.Rows[i];
+													string sNAME         = Sql.ToString(row["ID"  ]);
+													string sDISPLAY_NAME = Sql.ToString(row["NAME"]);
+													objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sNAME] = sDISPLAY_NAME;
+												}
+											}
+										}
+										using ( DataTable dt = this.SchedulerJobs() )
+										{
+											string sLIST_NAME = "SchedulerJobs";
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sNAME         = Sql.ToString(row["NAME"        ]);
+												string sDISPLAY_NAME = Sql.ToString(row["DISPLAY_NAME"]);
+												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sNAME] = sDISPLAY_NAME;
+											}
+										}
 										using ( DataTable dt = this.TerminologyPickLists() )
 										{
 											string sLIST_NAME = "TerminologyPickLists";
@@ -4875,6 +9011,17 @@ namespace SplendidCRM
 												DataRow row = dt.Rows[i];
 												string sNAME         = Sql.ToString(row["VIEW_NAME"]);
 												string sDISPLAY_NAME = Sql.ToString(row["VIEW_NAME"]);
+												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sNAME] = sDISPLAY_NAME;
+											}
+										}
+										using ( DataTable dt = this.LibraryPaymentGateways() )
+										{
+											string sLIST_NAME = "LibraryPaymentGateways";
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sNAME         = Sql.ToString(row["NAME"        ]);
+												string sDISPLAY_NAME = Sql.ToString(row["DISPLAY_NAME"]);
 												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sNAME] = sDISPLAY_NAME;
 											}
 										}
@@ -4927,6 +9074,18 @@ namespace SplendidCRM
 												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sNAME] = sDISPLAY_NAME;
 											}
 										}
+										// 06/02/2021 Paul.  Provide WorkflowModules to the React Client. 
+										using ( DataTable dt = this.WorkflowModules() )
+										{
+											string sLIST_NAME = "WorkflowModules";
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sID           = Sql.ToString(row["MODULE_NAME" ]);
+												string sDISPLAY_NAME = Sql.ToString(row["DISPLAY_NAME"]);
+												objs[L10n.NAME + "." + "." + sLIST_NAME + "." + sID] = sDISPLAY_NAME;
+											}
+										}
 										// 09/13/2021 Paul.  Provide AuditedModules to the React Client. 
 										using ( DataTable dt = this.AuditedModules() )
 										{
@@ -4953,7 +9112,7 @@ namespace SplendidCRM
 										}
 									}
 								}
-								memoryCache.Set("vwTERMINOLOGY.ReactClient" + (bAdmin ? ".Admin": ""), objs, DefaultCacheExpiration());
+								Cache.Set("vwTERMINOLOGY.ReactClient" + (bAdmin ? ".Admin": ""), objs, DefaultCacheExpiration());
 							}
 						}
 					}
@@ -4972,7 +9131,7 @@ namespace SplendidCRM
 
 		public Dictionary<string, object> GetLoginTerminology()
 		{
-			Dictionary<string, object> objs = memoryCache.Get("vwTERMINOLOGY.ReactClient.Login") as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwTERMINOLOGY.ReactClient.Login") as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -5028,7 +9187,7 @@ namespace SplendidCRM
 									}
 								}
 							}
-							memoryCache.Set("vwTERMINOLOGY.ReactClient.Login", objs, DefaultCacheExpiration());
+							Cache.Set("vwTERMINOLOGY.ReactClient.Login", objs, DefaultCacheExpiration());
 						}
 					}
 				}
@@ -5046,7 +9205,7 @@ namespace SplendidCRM
 		public Dictionary<string, object> GetAllTerminologyLists(bool bAdmin)
 		{
 			// 09/27/2020 Paul.  Terminology is language specific. 
-			Dictionary<string, object> objs = memoryCache.Get("vwTERMINOLOGY_PickList.ReactClient." + L10n.NAME + (bAdmin ? ".Admin" : "")) as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwTERMINOLOGY_PickList.ReactClient." + L10n.NAME + (bAdmin ? ".Admin" : "")) as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -5128,6 +9287,32 @@ namespace SplendidCRM
 											DataRow row = dt.Rows[i];
 											string sID = Sql.ToString(row["NAME"]);
 											layout.Add(sID);
+										}
+									}
+									using ( DataTable dt = this.Release() )
+									{
+										List<string> layout = new List<string>();
+										objs.Add(L10n.NAME + ".Release", layout);
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID = Sql.ToString(row["ID"]);
+											layout.Add(sID);
+										}
+									}
+									// 12/18/2017 Paul.  Order modules will not exist on Community Edition. 
+									if ( Sql.ToBoolean(Application["Modules.ContractTypes.RestEnabled"]) )
+									{
+										using ( DataTable dt = this.ContractTypes() )
+										{
+											List<string> layout = new List<string>();
+											objs.Add(L10n.NAME + ".ContractTypes", layout);
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sID = Sql.ToString(row["ID"]);
+												layout.Add(sID);
+											}
 										}
 									}
 									using ( DataTable dt = this.AssignedUser() )
@@ -5239,6 +9424,84 @@ namespace SplendidCRM
 											}
 										}
 									}
+									// 02/28/2016 Paul.  Order management in html5. 
+									// 12/18/2017 Paul.  Order modules will not exist on Community Edition. 
+									if ( Sql.ToBoolean(Application["Modules.TaxRates.RestEnabled"]) )
+									{
+										using ( DataTable dt = this.TaxRates() )
+										{
+											List<string> layout = new List<string>();
+											objs.Add(L10n.NAME + ".TaxRates", layout);
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sID = Sql.ToString(row["ID"]);
+												layout.Add(sID);
+											}
+										}
+									}
+									// 12/18/2017 Paul.  Order modules will not exist on Community Edition. 
+									if ( Sql.ToBoolean(Application["Modules.Shippers.RestEnabled"]) )
+									{
+										using ( DataTable dt = this.Shippers() )
+										{
+											List<string> layout = new List<string>();
+											objs.Add(L10n.NAME + ".Shippers", layout);
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sID = Sql.ToString(row["ID"]);
+												layout.Add(sID);
+											}
+										}
+									}
+									// 12/18/2017 Paul.  Order modules will not exist on Community Edition. 
+									if ( Sql.ToBoolean(Application["Modules.Discounts.RestEnabled"]) )
+									{
+										using ( DataTable dt = this.Discounts() )
+										{
+											DataView vwDiscounts = new DataView(dt);
+											// 02/29/2016 Paul.  The Line Items Editor uses a reduced set of discounts. 
+											vwDiscounts.RowFilter = "PRICING_FORMULA in ('PercentageDiscount', 'FixedDiscount')";
+											List<string> layout = new List<string>();
+											objs.Add(L10n.NAME + ".Discounts", layout);
+											for ( int i = 0; i < vwDiscounts.Count; i++ )
+											{
+												DataRowView row = vwDiscounts[i];
+												string sID = Sql.ToString(row["ID"]);
+												layout.Add(sID);
+											}
+										}
+									}
+									// 12/18/2017 Paul.  Order modules will not exist on Community Edition. 
+									if ( Sql.ToBoolean(Application["Modules.Quotes.RestEnabled"]) || Sql.ToBoolean(Application["Modules.Orders.RestEnabled"]) || Sql.ToBoolean(Application["Modules.Invoices.RestEnabled"]) )
+									{
+										using ( DataTable dt = this.List("pricing_formula_dom") )
+										{
+											DataView vwPricingFormulas = new DataView(dt);
+											// 02/29/2016 Paul.  The Line Items Editor uses a reduced set of pricing formulas. 
+											vwPricingFormulas.RowFilter = "NAME in ('PercentageDiscount', 'FixedDiscount')";
+											List<string> layout = new List<string>();
+											objs.Add(L10n.NAME + ".pricing_formula_line_items", layout);
+											for ( int i = 0; i < vwPricingFormulas.Count; i++ )
+											{
+												DataRowView row = vwPricingFormulas[i];
+												string sID = Sql.ToString(row["NAME"]);
+												layout.Add(sID);
+											}
+										}
+										using ( DataTable dt = this.PaymentTerms() )
+										{
+											List<string> layout = new List<string>();
+											objs.Add(L10n.NAME + ".PaymentTerms", layout);
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sID = Sql.ToString(row["ID"]);
+												layout.Add(sID);
+											}
+										}
+									}
 									// 08/19/2019 Paul.  Modules are used by the ReportDesigner, so it is a non-admin list. 
 									using ( DataTable dt = this.Modules() )
 									{
@@ -5252,9 +9515,159 @@ namespace SplendidCRM
 											layout.Add(sID);
 										}
 									}
+									// 04/15/2021 Paul.  RulesModules is used by Business Rules module. 
+									using ( DataTable dt = this.RulesModules() )
+									{
+										DataView vw = new DataView(dt);
+										vw.Sort = "DISPLAY_NAME";
+										List<string> layout = new List<string>();
+										objs.Add(L10n.NAME + ".RulesModules", layout);
+										for ( int i = 0; i < vw.Count; i++ )
+										{
+											DataRowView row = vw[i];
+											string sMODULE_NAME = Sql.ToString(row["MODULE_NAME"]);
+											// 05/07/2021 Paul.  Prefilter the list to only those modules that can be edited. 
+											if ( Security.GetUserAccess(sMODULE_NAME, "edit") >= 0 )
+												layout.Add(sMODULE_NAME);
+										}
+										// 03/29/2012 Paul.  Add Rules Wizard support to Terminology module. 
+										if ( Security.IS_ADMIN )
+										{
+											layout.Add("Terminology");
+										}
+									}
+									// 05/01/2020 Paul.  Provide Email Templates to the React Client. 
+									using ( DataTable dt = this.EmailTemplates() )
+									{
+										List<string> layout = new List<string>();
+										objs.Add(L10n.NAME + ".EmailTemplates", layout);
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID = Sql.ToString(row["ID"]);
+											layout.Add(sID);
+										}
+									}
+									// 05/01/2020 Paul.  Provide User Signatures to the React Client. 
+									using ( DataTable dt = this.UserSignatures() )
+									{
+										List<string> layout = new List<string>();
+										objs.Add(L10n.NAME + ".UserSignatures", layout);
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID = Sql.ToString(row["ID"]);
+											layout.Add(sID);
+										}
+									}
+									// 05/01/2020 Paul.  Provide User Mailboxes to the React Client. 
+									using ( DataTable dt = this.OutboundMail() )
+									{
+										List<string> layout = new List<string>();
+										objs.Add(L10n.NAME + ".OutboundMail", layout);
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID = Sql.ToString(row["ID"]);
+											layout.Add(sID);
+										}
+									}
+									// 04/18/2022 Paul.  EmailMarketing requires InboundEmailBounce list. 
+									using ( DataTable dt = this.InboundEmailBounce() )
+									{
+										List<string> layout = new List<string>();
+										objs.Add(L10n.NAME + ".InboundEmailBounce", layout);
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID = Sql.ToString(row["ID"]);
+											layout.Add(sID);
+										}
+									}
+									// 01/24/2021 Paul.  Add OutboundSms. 
+									using ( DataTable dt = this.OutboundSms() )
+									{
+										List<string> layout = new List<string>();
+										objs.Add(L10n.NAME + ".OutboundSms", layout);
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID = Sql.ToString(row["ID"]);
+											layout.Add(sID);
+										}
+									}
+									// 12/17/2020 Paul.  Provide ReportingModules to the React Client. 
+									using ( DataTable dt = this.ReportingModules() )
+									{
+										List<string> layout = new List<string>();
+										objs.Add(L10n.NAME + ".ReportingModules", layout);
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sID = Sql.ToString(row["MODULE_NAME"]);
+											layout.Add(sID);
+										}
+									}
 									// 03/26/2019 Paul.  Admin has more custom lists. 
 									if ( bAdmin )
 									{
+										// 06/29/2020 Paul.  Order modules will not exist on Community Edition. 
+										if ( Sql.ToBoolean(Application["Modules.Manufacturers.RestEnabled"]) || Sql.ToBoolean(Application["Modules.ProductTemplates.RestEnabled"]) )
+										{
+											using ( DataTable dt = this.Manufacturers() )
+											{
+												List<string> layout = new List<string>();
+												objs.Add(L10n.NAME + ".Manufacturers", layout);
+												for ( int i = 0; i < dt.Rows.Count; i++ )
+												{
+													DataRow row = dt.Rows[i];
+													string sID = Sql.ToString(row["ID"]);
+													layout.Add(sID);
+												}
+											}
+										}
+										// 06/29/2020 Paul.  Order modules will not exist on Community Edition. 
+										if ( Sql.ToBoolean(Application["Modules.ProductTypes.RestEnabled"]) || Sql.ToBoolean(Application["Modules.ProductTemplates.RestEnabled"]) )
+										{
+											using ( DataTable dt = this.ProductTypes() )
+											{
+												List<string> layout = new List<string>();
+												objs.Add(L10n.NAME + ".ProductTypes", layout);
+												for ( int i = 0; i < dt.Rows.Count; i++ )
+												{
+													DataRow row = dt.Rows[i];
+													string sID = Sql.ToString(row["ID"]);
+													layout.Add(sID);
+												}
+											}
+										}
+										// 06/29/2020 Paul.  Order modules will not exist on Community Edition. 
+										if ( Sql.ToBoolean(Application["Modules.ProductCategories.RestEnabled"]) || Sql.ToBoolean(Application["Modules.ProductTemplates.RestEnabled"]) )
+										{
+											using ( DataTable dt = this.ProductCategories() )
+											{
+												List<string> layout = new List<string>();
+												objs.Add(L10n.NAME + ".ProductCategories", layout);
+												for ( int i = 0; i < dt.Rows.Count; i++ )
+												{
+													DataRow row = dt.Rows[i];
+													string sID = Sql.ToString(row["ID"]);
+													layout.Add(sID);
+												}
+											}
+										}
+										using ( DataTable dt = this.SchedulerJobs() )
+										{
+											DataView vw = new DataView(dt);
+											List<string> layout = new List<string>();
+											objs.Add(L10n.NAME + ".SchedulerJobs", layout);
+											for ( int i = 0; i < vw.Count; i++ )
+											{
+												DataRowView row = vw[i];
+												string sID = Sql.ToString(row["NAME"]);
+												layout.Add(sID);
+											}
+										}
 										using ( DataTable dt = this.TerminologyPickLists() )
 										{
 											DataView vw = new DataView(dt);
@@ -5276,6 +9689,18 @@ namespace SplendidCRM
 											{
 												DataRowView row = vw[i];
 												string sID = Sql.ToString(row["VIEW_NAME"]);
+												layout.Add(sID);
+											}
+										}
+										using ( DataTable dt = this.LibraryPaymentGateways() )
+										{
+											DataView vw = new DataView(dt);
+											List<string> layout = new List<string>();
+											objs.Add(L10n.NAME + ".LibraryPaymentGateways", layout);
+											for ( int i = 0; i < vw.Count; i++ )
+											{
+												DataRowView row = vw[i];
+												string sID = Sql.ToString(row["NAME"]);
 												layout.Add(sID);
 											}
 										}
@@ -5326,6 +9751,18 @@ namespace SplendidCRM
 											}
 											objs.Add(L10n.NAME + ".CustomEditModules", MODULE_TYPES);
 										}
+										// 06/02/2021 Paul.  Provide WorkflowModules to the React Client. 
+										using ( DataTable dt = this.WorkflowModules() )
+										{
+											List<string> layout = new List<string>();
+											objs.Add(L10n.NAME + ".WorkflowModules", layout);
+											for ( int i = 0; i < dt.Rows.Count; i++ )
+											{
+												DataRow row = dt.Rows[i];
+												string sID = Sql.ToString(row["MODULE_NAME"]);
+												layout.Add(sID);
+											}
+										}
 										// 09/13/2021 Paul.  Provide AuditedModules to the React Client. 
 										using ( DataTable dt = this.AuditedModules() )
 										{
@@ -5352,7 +9789,222 @@ namespace SplendidCRM
 										}
 									}
 								}
-								memoryCache.Set("vwTERMINOLOGY_PickList.ReactClient" + (bAdmin ? ".Admin" : ""), objs, DefaultCacheExpiration());
+								Cache.Set("vwTERMINOLOGY_PickList.ReactClient" + (bAdmin ? ".Admin" : ""), objs, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					throw;
+				}
+			}
+			return objs;
+		}
+
+		// 12/10/2022 Paul.  Allow Login Terminology Lists to be customized. 
+		public Dictionary<string, object> GetLoginTerminologyLists(List<string> lstLIST_NAME, Dictionary<string, object> TERMINOLOGY)
+		{
+			// 09/27/2020 Paul.  Terminology is language specific. 
+			L10N L10n = new L10N(Session["USER_SETTINGS/CULTURE"] as string);
+			Dictionary<string, object> objs = Cache.Get("vwTERMINOLOGY_PickList.ReactClient.Login") as Dictionary<string, object>;
+			if ( objs == null )
+			{
+				objs = new Dictionary<string, object>();
+				try
+				{
+					// 12/14/2022 Paul.  Most companies will not return list data. 
+					if ( lstLIST_NAME.Count > 0 )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL = String.Empty;
+							sSQL = "select distinct                " + ControlChars.CrLf
+							     + "       NAME                    " + ControlChars.CrLf
+							     + "     , DISPLAY_NAME            " + ControlChars.CrLf
+							     + "     , LIST_NAME               " + ControlChars.CrLf
+							     + "     , LIST_ORDER              " + ControlChars.CrLf
+							     + "  from vwTERMINOLOGY           " + ControlChars.CrLf
+							     + " where lower(LANG) = @LANG     " + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								Sql.AddParameter(cmd, "@LANG", L10n.NAME.ToLower());
+								Sql.AppendParameter(cmd, lstLIST_NAME.ToArray(), "LIST_NAME");
+								cmd.CommandText += " order by LIST_NAME, LIST_ORDER" + ControlChars.CrLf;
+							
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									using ( DataTable dt = new DataTable() )
+									{
+										da.Fill(dt);
+										string sLAST_LIST_NAME = String.Empty;
+										List<string> layout = null;
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											string sNAME         = Sql.ToString(row["NAME"        ]);
+											string sLIST_NAME    = Sql.ToString(row["LIST_NAME"   ]);
+											string sDISPLAY_NAME = Sql.ToString(row["DISPLAY_NAME"]);
+											if ( sLAST_LIST_NAME != sLIST_NAME )
+											{
+												sLAST_LIST_NAME = sLIST_NAME;
+												layout = new List<string>();
+												objs.Add(L10n.NAME + "." + sLAST_LIST_NAME, layout);
+											}
+											layout.Add(sNAME);
+											// 12/10/2022 Paul.  Make sure to include display name in TERMINOLOGY, as TERMINOLOGY_LIST only includes lists. 
+											TERMINOLOGY[L10n.NAME + "." + "." + sLIST_NAME + "." + sNAME] = sDISPLAY_NAME;
+										}
+									}
+								}
+								// 12/10/2022 Paul.  In case the list is custom, search the custom caches. 
+								foreach ( string sCACHE_NAME in lstLIST_NAME )
+								{
+									List<SplendidCacheReference> arrCustomCaches = this.CustomCaches;
+									foreach ( SplendidCacheReference cache in arrCustomCaches )
+									{
+										if ( cache.Name == sCACHE_NAME )
+										{
+											string sDataValueField = cache.DataValueField;
+											string sDataTextField  = cache.DataTextField ;
+											SplendidCacheCallback cbkDataSource = cache.DataSource;
+											using ( DataTable dt = cbkDataSource() )
+											{
+												List<string> layout = new List<string>();
+												objs.Add(L10n.NAME + "." + sCACHE_NAME, layout);
+												for ( int i = 0; i < dt.Rows.Count; i++ )
+												{
+													DataRow row = dt.Rows[i];
+													string sID   = Sql.ToString(row[sDataValueField]);
+													string sNAME = Sql.ToString(row[sDataValueField]);
+													layout.Add(sID);
+													// 12/10/2022 Paul.  Make sure to include display name in TERMINOLOGY, as TERMINOLOGY_LIST only includes lists. 
+													TERMINOLOGY[L10n.NAME + "." + "." + sCACHE_NAME + "." + sID] = sNAME;
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+					Cache.Set("vwTERMINOLOGY_PickList.ReactClient.Login", objs, DefaultCacheExpiration());
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					throw;
+				}
+			}
+			return objs;
+		}
+
+		// 03/02/2019 Paul.  Functions are now static and take modules list input so that they can be used in the Admin API. 
+		public Dictionary<string, object> GetAllTaxRates()
+		{
+			Dictionary<string, object> objs = Cache.Get("vwTAX_RATES_LISTBOX.ReactClient") as Dictionary<string, object>;
+			if ( objs == null )
+			{
+				objs = new Dictionary<string, object>();
+				try
+				{
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL = String.Empty;
+							// 04/07/2016 Paul.  Tax rates per team. 
+							sSQL = "select *                  " + ControlChars.CrLf
+								 + "  from vwTAX_RATES_LISTBOX" + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+								// 04/07/2016 Paul.  Tax rates per team. 
+								if ( Sql.ToBoolean(Application["CONFIG.Orders.EnableTaxRateTeams"]) )
+									Security.Filter(cmd, "TaxRates", "list");
+								cmd.CommandText += " order by LIST_ORDER      " + ControlChars.CrLf;
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									using ( DataTable dt = new DataTable() )
+									{
+										da.Fill(dt);
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											Dictionary<string, object> drow = new Dictionary<string, object>();
+											for ( int j = 0; j < dt.Columns.Count; j++ )
+											{
+												drow.Add(dt.Columns[j].ColumnName, row[j]);
+											}
+											objs.Add(Sql.ToString(row["ID"]), drow);
+										}
+										Cache.Set("vwTAX_RATES_LISTBOX.ReactClient", objs, DefaultCacheExpiration());
+									}
+								}
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+					throw;
+				}
+			}
+			return objs;
+		}
+
+		// 03/02/2019 Paul.  Functions are now static and take modules list input so that they can be used in the Admin API. 
+		public Dictionary<string, object> GetAllDiscounts()
+		{
+			Dictionary<string, object> objs = Cache.Get("vwDISCOUNTS_LISTBOX.ReactClient") as Dictionary<string, object>;
+			if ( objs == null )
+			{
+				objs = new Dictionary<string, object>();
+				try
+				{
+					if ( Security.IsAuthenticated() )
+					{
+						DbProviderFactory dbf = DbProviderFactories.GetFactory();
+						using ( IDbConnection con = dbf.CreateConnection() )
+						{
+							con.Open();
+							string sSQL = String.Empty;
+							sSQL = "select *                  " + ControlChars.CrLf
+							     + "  from vwDISCOUNTS_LISTBOX" + ControlChars.CrLf
+							     + " where PRICING_FORMULA in ('PercentageDiscount', 'FixedDiscount')" + ControlChars.CrLf
+							     + " order by NAME            " + ControlChars.CrLf;
+							using ( IDbCommand cmd = con.CreateCommand() )
+							{
+								cmd.CommandText = sSQL;
+							
+								using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+								{
+									((IDbDataAdapter)da).SelectCommand = cmd;
+									using ( DataTable dt = new DataTable() )
+									{
+										da.Fill(dt);
+										for ( int i = 0; i < dt.Rows.Count; i++ )
+										{
+											DataRow row = dt.Rows[i];
+											Dictionary<string, object> drow = new Dictionary<string, object>();
+											for ( int j = 0; j < dt.Columns.Count; j++ )
+											{
+												drow.Add(dt.Columns[j].ColumnName, row[j]);
+											}
+											objs.Add(Sql.ToString(row["ID"]), drow);
+										}
+										Cache.Set("vwDISCOUNTS_LISTBOX.ReactClient", objs, DefaultCacheExpiration());
+									}
+								}
 							}
 						}
 					}
@@ -5369,7 +10021,7 @@ namespace SplendidCRM
 		// 09/12/2019 Paul.  User Profile needs the timezones and currencies. 
 		public Dictionary<string, object> GetAllTimezones()
 		{
-			Dictionary<string, object> objs = memoryCache.Get("vwTIMEZONES.ReactClient") as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwTIMEZONES.ReactClient") as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -5377,7 +10029,7 @@ namespace SplendidCRM
 				{
 					if ( Security.IsAuthenticated() )
 					{
-						using ( DataTable dt = this.Timezones(Application) )
+						using ( DataTable dt = this.Timezones() )
 						{
 							for ( int i = 0; i < dt.Rows.Count; i++ )
 							{
@@ -5389,7 +10041,7 @@ namespace SplendidCRM
 								}
 								objs.Add(Sql.ToString(row["ID"]), drow);
 							}
-							memoryCache.Set("vwTIMEZONES.ReactClient", objs, DefaultCacheExpiration());
+							Cache.Set("vwTIMEZONES.ReactClient", objs, DefaultCacheExpiration());
 						}
 					}
 				}
@@ -5405,7 +10057,7 @@ namespace SplendidCRM
 		// 09/12/2019 Paul.  User Profile needs the timezones and currencies. 
 		public Dictionary<string, object> GetAllCurrencies()
 		{
-			Dictionary<string, object> objs = memoryCache.Get("vwCURRENCIES.ReactClient") as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwCURRENCIES.ReactClient") as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -5413,7 +10065,7 @@ namespace SplendidCRM
 				{
 					if ( Security.IsAuthenticated() )
 					{
-						using ( DataTable dt = this.Currencies(Application) )
+						using ( DataTable dt = this.Currencies() )
 						{
 							for ( int i = 0; i < dt.Rows.Count; i++ )
 							{
@@ -5425,7 +10077,7 @@ namespace SplendidCRM
 								}
 								objs.Add(Sql.ToString(row["ID"]), drow);
 							}
-							memoryCache.Set("vwCURRENCIES.ReactClient", objs, DefaultCacheExpiration());
+							Cache.Set("vwCURRENCIES.ReactClient", objs, DefaultCacheExpiration());
 						}
 					}
 				}
@@ -5441,7 +10093,7 @@ namespace SplendidCRM
 		// 09/12/2019 Paul.  User Profile needs the timezones and currencies. 
 		public Dictionary<string, object> GetAllLanguages()
 		{
-			Dictionary<string, object> objs = memoryCache.Get("vwLANGUAGES.ReactClient") as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwLANGUAGES.ReactClient") as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -5449,7 +10101,7 @@ namespace SplendidCRM
 				{
 					if ( Security.IsAuthenticated() )
 					{
-						using ( DataTable dt = this.Languages(Application) )
+						using ( DataTable dt = this.Languages() )
 						{
 							for ( int i = 0; i < dt.Rows.Count; i++ )
 							{
@@ -5461,7 +10113,7 @@ namespace SplendidCRM
 								}
 								objs.Add(Sql.ToString(row["NAME"]), drow);
 							}
-							memoryCache.Set("vwLANGUAGES.ReactClient", objs, DefaultCacheExpiration());
+							Cache.Set("vwLANGUAGES.ReactClient", objs, DefaultCacheExpiration());
 						}
 					}
 				}
@@ -5475,11 +10127,11 @@ namespace SplendidCRM
 		}
 
 		// 03/02/2019 Paul.  Functions are now static and take modules list input so that they can be used in the Admin API. 
-		public void GetAllReactCustomViews(Dictionary<string, object> objs, List<string> lstMODULES, string sFolder, bool bIS_ADMIN)
+		public void GetAllReactCustomViews(Dictionary<string, object> objs, List<string> lstMODULES, string sFolder, bool bIS_ADMIN, bool bLogin)
 		{
 			try
 			{
-				if ( Security.IsAuthenticated() )
+				if ( Security.IsAuthenticated() || bLogin )
 				{
 					string sCustomViewsJS = sFolder.Replace("~", hostingEnvironment.ContentRootPath).Replace("/", "\\");  // Context.Server.MapPath(sFolder);
 					if ( Directory.Exists(sCustomViewsJS) )
@@ -5909,7 +10561,7 @@ namespace SplendidCRM
 		// 05/26/2019 Paul.  Return Users and Teams in GetAllLayouts. 
 		public Dictionary<string, object> GetAllUsers()
 		{
-			Dictionary<string, object> objs = memoryCache.Get("vwUSERS.ReactClient") as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwUSERS.ReactClient") as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -5948,7 +10600,7 @@ namespace SplendidCRM
 											obj["USER_NAME"] = sUSER_NAME;
 											objs.Add(gID.ToString(), obj);
 										}
-										memoryCache.Set("vwUSERS.ReactClient", objs, DefaultCacheExpiration());
+										Cache.Set("vwUSERS.ReactClient", objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -5967,7 +10619,7 @@ namespace SplendidCRM
 		// 05/26/2019 Paul.  Return Users and Teams in GetAllLayouts. 
 		public Dictionary<string, object> GetAllTeams()
 		{
-			Dictionary<string, object> objs = memoryCache.Get("vwTEAMS.ReactClient") as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwTEAMS.ReactClient") as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -6028,7 +10680,7 @@ namespace SplendidCRM
 												}
 											}
 										}
-										memoryCache.Set("vwTEAMS.ReactClient", objs, DefaultCacheExpiration());
+										Cache.Set("vwTEAMS.ReactClient", objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -6136,6 +10788,12 @@ namespace SplendidCRM
 				profile.USER_PHONE_WORK     = Sql.ToString(Session["PHONE_WORK"  ]);
 				profile.USER_SMS_OPT_IN     = Sql.ToString(Session["SMS_OPT_IN"  ]);
 				profile.USER_PHONE_MOBILE   = Sql.ToString(Session["PHONE_MOBILE"]);
+				profile.USER_TWITTER_TRACKS = this.MyTwitterTracks();
+				profile.USER_CHAT_CHANNELS  = this.MyChatChannels();
+				// 09/17/2020 Paul.  Add PhoneBurner SignalR support. 
+				DateTime dtOAUTH_EXPIRES_AT = this.GetOAuthTokenExpiresAt("PhoneBurner", Security.USER_ID);
+				profile.PHONEBURNER_TOKEN_EXPIRES_AT = (dtOAUTH_EXPIRES_AT != DateTime.MinValue ? profile.PHONEBURNER_TOKEN_EXPIRES_AT = RestUtil.ToJsonDate(dtOAUTH_EXPIRES_AT) : String.Empty);
+				
 				// 02/26/2016 Paul.  Use values from C# NumberFormatInfo. 
 				// 09/02/2020 Paul.  We were getting arabic on the react client when using CurrentCulture.  
 				CultureInfo culture = CultureInfo.CreateSpecificCulture(profile.USER_LANG);
@@ -6311,7 +10969,7 @@ namespace SplendidCRM
 
 		public Dictionary<string, object> GetModuleAccess(List<string> lstMODULES)
 		{
-			Dictionary<string, object> objs = memoryCache.Get("vwACL_ACCESS_ByModule.ReactClient") as Dictionary<string, object>;
+			Dictionary<string, object> objs = Cache.Get("vwACL_ACCESS_ByModule.ReactClient") as Dictionary<string, object>;
 			if ( objs == null )
 			{
 				objs = new Dictionary<string, object>();
@@ -6374,7 +11032,7 @@ namespace SplendidCRM
 											module["archive"] = archive;
 											objs.Add(sMODULE_NAME, module);
 										}
-										memoryCache.Set("vwACL_ACCESS_ByModule.ReactClient", objs, DefaultCacheExpiration());
+										Cache.Set("vwACL_ACCESS_ByModule.ReactClient", objs, DefaultCacheExpiration());
 									}
 								}
 							}
@@ -6399,7 +11057,7 @@ namespace SplendidCRM
 				objs = new Dictionary<string, object>();
 				try
 				{
-					if ( Security.IsAuthenticated() && SplendidInit.bEnableACLFieldSecurity )
+					if ( SplendidInit.bEnableACLFieldSecurity )
 					{
 						DbProviderFactory dbf = DbProviderFactories.GetFactory();
 						using ( IDbConnection con = dbf.CreateConnection() )
@@ -6512,9 +11170,52 @@ namespace SplendidCRM
 			return objs;
 		}
 
+		// 05/01/2020 Paul.  Cache EmailTemplates for use in React Client. 
+		public void ClearEmailTemplates()
+		{
+			Cache.Remove("vwEMAIL_TEMPLATES_List");
+		}
+
+		// 05/01/2020 Paul.  Cache EmailTemplates for use in React Client. 
+		public DataTable EmailTemplates()
+		{
+			DataTable dt = Cache.Get("vwEMAIL_TEMPLATES_List") as DataTable;
+			if ( dt == null )
+			{
+				try
+				{
+					DbProviderFactory dbf = DbProviderFactories.GetFactory();
+					using ( IDbConnection con = dbf.CreateConnection() )
+					{
+						con.Open();
+						string sSQL;
+						sSQL = "select ID                    " + ControlChars.CrLf
+						     + "     , NAME                  " + ControlChars.CrLf
+						     + "  from vwEMAIL_TEMPLATES_List" + ControlChars.CrLf
+						     + " order by NAME desc          " + ControlChars.CrLf;
+						using ( IDbCommand cmd = con.CreateCommand() )
+						{
+							cmd.CommandText = sSQL;
+							using ( DbDataAdapter da = dbf.CreateDataAdapter() )
+							{
+								((IDbDataAdapter)da).SelectCommand = cmd;
+								dt = new DataTable();
+								da.Fill(dt);
+								Cache.Set("vwEMAIL_TEMPLATES_List", dt, DefaultCacheExpiration());
+							}
+						}
+					}
+				}
+				catch(Exception ex)
+				{
+					SplendidError.SystemError(new StackTrace(true).GetFrame(0), ex);
+				}
+			}
+			return dt;
+		}
+
 		#endregion
 	}
 
 }
-
 

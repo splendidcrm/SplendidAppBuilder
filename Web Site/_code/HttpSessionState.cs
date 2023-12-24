@@ -42,16 +42,20 @@ namespace SplendidCRM
 				object obj = null;
 				try
 				{
-					string value = this.Context.Session.GetString(key);
-					if ( value != null )
+					// 06/18/2023 Paul.  Debugging with IIS express fails with Context == null. 
+					if ( this.Context != null )
 					{
-						// 12/26/2021 Paul.  JsonSerializer.Deserialize is returning JsonElement, which does not convert well to boolean. 
-						if ( value == "true" )
-							obj = true;
-						else if ( value == "false" )
-							obj = false;
-						else
-							obj = JsonSerializer.Deserialize<object>(value);
+						string value = this.Context.Session.GetString(key);
+						if ( value != null )
+						{
+							// 12/26/2021 Paul.  JsonSerializer.Deserialize is returning JsonElement, which does not convert well to boolean. 
+							if ( value == "true" )
+								obj = true;
+							else if ( value == "false" )
+								obj = false;
+							else
+								obj = JsonSerializer.Deserialize<object>(value);
+						}
 					}
 				}
 				catch
@@ -64,7 +68,7 @@ namespace SplendidCRM
 				if ( value != null )
 				{
 					if ( value.GetType() == typeof(DataTable) )
-						throw(new Exception("Use Get/Set to serialize DataTable"));
+						throw(new Exception("HttpSessionState: Use Get/Set to serialize DataTable"));
 					this.Context.Session.SetString(key, JsonSerializer.Serialize(value));
 				}
 				else
@@ -74,10 +78,16 @@ namespace SplendidCRM
 			}
 		}
 
+		// https://learn.microsoft.com/en-us/aspnet/core/fundamentals/app-state?view=aspnetcore-7.0
 		public void SetTable(string key, DataTable value)
 		{
 			if ( value != null )
 			{
+				// 06/09/2023 Paul.  Must have table name to serialize. 
+				if ( Sql.IsEmptyString(value.TableName) )
+				{
+					value.TableName = "[" + key + "]";
+				}
 				StringBuilder sb = new StringBuilder();
 				using ( StringWriter wtr = new StringWriter(sb, System.Globalization.CultureInfo.InvariantCulture) )
 				{
@@ -122,4 +132,3 @@ namespace SplendidCRM
 		}
 	}
 }
-

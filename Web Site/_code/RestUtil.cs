@@ -57,20 +57,23 @@ namespace SplendidCRM
 		private SplendidInit         SplendidInit       ;
 		private Crm.Config           Config             = new Crm.Config();
 		private Crm.Images           Images             ;
+		// 11/22/2023 Paul.  When unsyncing, we need to immediately clear the remote flag. 
+		private ExchangeSync         ExchangeSync       ;
 
-		public RestUtil(IHttpContextAccessor httpContextAccessor, HttpSessionState Session, Security Security, Utils Utils, SplendidError SplendidError, SplendidCache SplendidCache, SplendidDynamic SplendidDynamic, SplendidInit SplendidInit, Crm.Images Images)
+		public RestUtil(IHttpContextAccessor httpContextAccessor, HttpSessionState Session, Security Security, Sql Sql, SqlProcs SqlProcs, Utils Utils, SplendidError SplendidError, SplendidCache SplendidCache, SplendidDynamic SplendidDynamic, SplendidInit SplendidInit, Crm.Images Images, ExchangeSync ExchangeSync)
 		{
 			this.Context             = httpContextAccessor.HttpContext;
 			this.Session             = Session            ;
 			this.Security            = Security           ;
-			this.Sql                 = new Sql(Session, Security);
-			this.SqlProcs            = new SqlProcs(Security, Sql);
+			this.Sql                 = Sql                ;
+			this.SqlProcs            = SqlProcs           ;
 			this.Utils               = Utils              ;
 			this.SplendidError       = SplendidError      ;
 			this.SplendidCache       = SplendidCache      ;
 			this.SplendidDynamic     = SplendidDynamic    ;
 			this.SplendidInit        = SplendidInit       ;
 			this.Images              = Images             ;
+			this.ExchangeSync        = ExchangeSync       ;
 		}
 
 		// 04/01/2020 Paul.  Move json utils to RestUtil. 
@@ -1324,7 +1327,7 @@ namespace SplendidCRM
 								{
 									if ( sMODULE_NAME == "Reports" || sMODULE_NAME == "ReportDesigner" )
 									{
-										if ( Config.WorkflowExists(Application) )
+										if ( Config.WorkflowExists() )
 										{
 											sSQL += "     , JOB_INTERVAL" + ControlChars.CrLf;
 											sSQL += "     , LAST_RUN    " + ControlChars.CrLf;
@@ -1412,7 +1415,7 @@ namespace SplendidCRM
 									{
 										if ( sMODULE_NAME == "Reports" || sMODULE_NAME == "ReportDesigner" )
 										{
-											if ( Config.WorkflowExists(Application) )
+											if ( Config.WorkflowExists() )
 											{
 												cmd.CommandText += "  left outer join (select JOB_INTERVAL, LAST_RUN, PARENT_ID from vwWORKFLOWS) WORKFLOWS" + ControlChars.CrLf
 												                +  "               on WORKFLOWS.PARENT_ID = ID                                             " + ControlChars.CrLf;
@@ -2126,7 +2129,8 @@ namespace SplendidCRM
 					{
 						// 04/08/2019 Paul.  Exceptions to the security values. 
 						// 10/27/2019 Paul.  Password manager values are not confidential.  We need to be able to see in order to edit. 
-						if ( !sNAME.Contains("logincomingmissedcalls") && !Sql.ToString(row["NAME"]).StartsWith("Password.") )
+						// 06/19/2023 Paul.  Twilio.LogInboundMessages looks like "login". 
+						if ( !sNAME.Contains("logincomingmissedcalls") && !sNAME.Contains("loginboundmessages") && !Sql.ToString(row["NAME"]).StartsWith("Password.") )
 						{
 							string sVALUE = Sql.ToString(row["VALUE"]);
 							if ( !Sql.IsEmptyString(sVALUE) )
@@ -3122,6 +3126,18 @@ namespace SplendidCRM
 													throw;
 												}
 											}
+											// 11/18/2014 Paul.  Send a SignalR alert if created. 
+											// 11/23/2023 Paul.  Chat not fully implemented. 
+											/*
+											if ( sTABLE_NAME == "CHAT_MESSAGES" )
+											{
+												// 08/05/2021 Paul.  ChatManager may not have been initialized. 
+												if ( !bRecordExists && !Sql.ToBoolean(Application["CONFIG.SignalR.Disabled"]) && ChatManager.Instance != null )
+												{
+													ChatManager.Instance.NewMessage(gID);
+												}
+											}
+											*/
 											// 10/08/2020 Paul.  Update current user session data. 
 											if ( sTABLE_NAME == "USERS" && gID == Security.USER_ID )
 											{
@@ -3157,8 +3173,9 @@ namespace SplendidCRM
 																gDEFAULT_TEAM = Sql.ToGuid  (rowUser["DEFAULT_TEAM"]);
 																if ( Sql.IsEmptyString(sTHEME) )
 																	sTHEME = SplendidDefaults.Theme();
+																// 09/04/2022 Paul.  sTHEME was getting set to the culture. 
 																if ( Sql.IsEmptyString(sLANG) )
-																	sTHEME = SplendidDefaults.Culture();
+																	sLANG = SplendidDefaults.Culture();
 															}
 														}
 													}
@@ -3173,6 +3190,19 @@ namespace SplendidCRM
 												{
 													Application.Remove("Users.EXTENSION." + sPREV_EXTENSION + ".USER_ID");
 													Application.Remove("Users.EXTENSION." + sPREV_EXTENSION + ".TEAM_ID");
+												}
+											}
+											// 11/22/2023 Paul.  When unsyncing, we need to immediately clear the remote flag. 
+											if ( sTABLE_NAME == "CONTACTS" )
+											{
+												if ( rowCurrent != null && rowCurrent.Table.Columns.Contains("SYNC_CONTACT") && dict.ContainsKey("SYNC_CONTACT") )
+												{
+													bool bSYNC_CONTACT_old = Sql.ToBoolean(rowCurrent["SYNC_CONTACT"]);
+													bool bSYNC_CONTACT_new = Sql.ToBoolean(dict      ["SYNC_CONTACT"]);
+													if ( bSYNC_CONTACT_old && !bSYNC_CONTACT_new )
+													{
+														ExchangeSync.UnsyncContact(Security.USER_ID, gID);
+													}
 												}
 											}
 										}
@@ -3211,5 +3241,4 @@ namespace SplendidCRM
 
 	}
 }
-
 

@@ -19,9 +19,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Web;
-//using System.Web.UI;
-//using System.Web.UI.HtmlControls;
-//using System.Web.UI.WebControls;
 using System.Data;
 using System.Data.Common;
 using System.Xml;
@@ -29,8 +26,6 @@ using System.Text;
 using System.Globalization;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
 using System.Runtime.InteropServices;
 
 using Microsoft.AspNetCore.Http;
@@ -739,28 +734,30 @@ namespace SplendidCRM
 		{
 			if ( obj == null || obj == DBNull.Value )
 				return false;
-			if ( obj.GetType() == Type.GetType("System.Int32") )
+			Type type = obj.GetType();
+			if ( type == Type.GetType("System.Int32") )
 				return (Convert.ToInt32(obj) == 0) ? false : true ;
 			// 01/15/2007 Paul.  Allow a Byte field to also be treated as a boolean. 
-			if ( obj.GetType() == Type.GetType("System.Byte") )
+			if ( type == Type.GetType("System.Byte") )
 				return (Convert.ToByte(obj) == 0) ? false : true ;
 			// 12/19/2005 Paul.  MySQL 5 returns SByte for a TinyInt. 
-			if ( obj.GetType() == Type.GetType("System.SByte") )
+			if ( type == Type.GetType("System.SByte") )
 				return (Convert.ToSByte(obj) == 0) ? false : true ;
 			// 12/17/2005 Paul.  Oracle returns booleans as Int16. 
-			if ( obj.GetType() == Type.GetType("System.Int16") )
+			if ( type == Type.GetType("System.Int16") )
 				return (Convert.ToInt16(obj) == 0) ? false : true ;
 			// 03/06/2006 Paul.  Oracle returns SYNC_CONTACT as decimal.
-			if ( obj.GetType() == Type.GetType("System.Decimal") )
+			if ( type == Type.GetType("System.Decimal") )
 				return (Convert.ToDecimal(obj) == 0) ? false : true ;
-			if ( obj.GetType() == Type.GetType("System.String") )
+			// 05/23/2023 Paul.  Core Request.Query will return Microsoft.Extensions.Primitives.StringValues. Type.GetType("Microsoft.Extensions.Primitives.StringValues") returns null. 
+			if ( type == Type.GetType("System.String") || type.FullName == "Microsoft.Extensions.Primitives.StringValues" )
 			{
 				string s = obj.ToString().ToLower();
 				// 11/21/2016 Paul.  Allow y as true. 
 				// 12/26/2021 Paul.  json.Deserialize is returning True for saved value of true. 
 				return (s == "True" || s == "true" || s == "on" || s == "1" || s == "y") ? true : false ;
 			}
-			if ( obj.GetType() != Type.GetType("System.Boolean") )
+			if ( type != Type.GetType("System.Boolean") )
 				return false;
 			// 03/05/2011 Paul.  Lets start using TryParse to protect against non-numeric strings. 
 			// This should prevent ugly exceptions when an alpha string is used. 
@@ -2812,7 +2809,10 @@ namespace SplendidCRM
 		public static void Trace(IDbCommand cmd)
 		{
 			// 09/16/2015 Paul.  Change to Debug as it is automatically not included in a release build. 
-			//Debug.WriteLine("Sql.Trace:	exec dbo." + Sql.ExpandParameters(cmd) + ";");
+			// 12/31/2020 Paul.  Disable Sql.Trace. 
+			// 10/29/2023 Paul.  Restore Sql.Trace, but not spWWF_INSTANCE_STATES_Lock. 
+			if ( cmd.CommandText != "spWWF_INSTANCE_STATES_Lock" )
+				Debug.WriteLine("Sql.Trace:	exec dbo." + Sql.ExpandParameters(cmd) + ";");
 		}
 
 		// 08/03/2011 Paul.  Generic duplication method. 
@@ -3880,7 +3880,8 @@ namespace SplendidCRM
 		{
 			if ( obj == null || obj == DBNull.Value )
 				return null;
-			if ( obj.GetType() == Type.GetType("System.Int32") )
+			Type type = obj.GetType();
+			if ( type == Type.GetType("System.Int32") )
 				return (Convert.ToInt32(obj) == 0) ? false : true ;
 			if ( obj.GetType() == Type.GetType("System.Byte") )
 				return (Convert.ToByte(obj) == 0) ? false : true ;
@@ -3890,7 +3891,8 @@ namespace SplendidCRM
 				return (Convert.ToInt16(obj) == 0) ? false : true ;
 			if ( obj.GetType() == Type.GetType("System.Decimal") )
 				return (Convert.ToDecimal(obj) == 0) ? false : true ;
-			if ( obj.GetType() == Type.GetType("System.String") )
+			// 05/23/2023 Paul.  Core Request.Query will return Microsoft.Extensions.Primitives.StringValues. Type.GetType("Microsoft.Extensions.Primitives.StringValues") returns null. 
+			if ( type == Type.GetType("System.String") || type.FullName == "Microsoft.Extensions.Primitives.StringValues" )
 			{
 				string s = obj.ToString().ToLower();
 				return (s == "true" || s == "on" || s == "1" || s == "y") ? true : false ;
@@ -3955,6 +3957,10 @@ namespace SplendidCRM
 	// 10/24/2010 Paul.  We need a Sql object that we can intanciate for use by the RulesWizard. 
 	public class SqlObj
 	{
+		protected SplendidControl Container        ;
+		protected Security        Security         ;
+		protected L10N            L10n             ;
+
 		public bool     IsEmptyString(string   str) { return Sql.IsEmptyString(str); }
 		public bool     IsEmptyString(object   obj) { return Sql.IsEmptyString(obj); }
 		public string   ToString     (string   str) { return Sql.ToString     (str); }
@@ -4009,6 +4015,13 @@ namespace SplendidCRM
 		public object   ToDBBoolean  (object   obj) { return Sql.ToDBBoolean  (obj); }
 		// 12/19/2012 Paul.  Provide a UrlEncode method. 
 		public string   UrlEncode    (string   str) { return HttpUtility.UrlEncode(str); }
+
+		// 04/27/2018 Paul.  We need to be able to generate an error message. 
+		public string ErrorMessage
+		{
+			get { return Container.RulesErrorMessage; }
+			set { Container.RulesErrorMessage = value; }
+		}
 	}
 
 	public class UniqueStringCollection : StringCollection
@@ -4080,5 +4093,4 @@ namespace SplendidCRM
 		}
 	}
 }
-
 

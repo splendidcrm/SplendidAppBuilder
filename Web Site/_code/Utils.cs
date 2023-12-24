@@ -21,14 +21,14 @@ using System.Data;
 using System.Data.Common;
 using System.Text;
 using System.Web;
-//using System.Web.UI;
-//using System.Web.UI.WebControls;
-//using System.Web.UI.HtmlControls;
 using System.Collections;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Diagnostics;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 
 namespace SplendidCRM
@@ -47,18 +47,22 @@ namespace SplendidCRM
 		private L10N                 L10n               ;
 		private SqlProcs             SqlProcs           ;
 		private SplendidCache        SplendidCache      ;
+		private XmlUtil              XmlUtil            ;
 		private Crm.Modules          Modules            ;
+		private readonly ILogger<Utils> _logger;
 
-		public Utils(IWebHostEnvironment hostingEnvironment, IHttpContextAccessor httpContextAccessor, HttpSessionState Session, SplendidCache SplendidCache, Crm.Modules Modules)
+		public Utils(IWebHostEnvironment hostingEnvironment, HttpSessionState Session, Security Security, Sql Sql, SqlProcs SqlProcs, SplendidCache SplendidCache, XmlUtil XmlUtil, Crm.Modules Modules, ILogger<Utils> logger)
 		{
 			this.hostingEnvironment  = hostingEnvironment ;
 			this.Session             = Session            ;
-			this.Security            = new Security(httpContextAccessor, Session);
-			this.L10n                = new L10N(Sql.ToString(Session["USER_LANG"]));
-			this.Sql                 = new Sql(Session, Security);
-			this.SqlProcs            = new SqlProcs(Security, Sql);
+			this.Security            = Security           ;
+			this.L10n                = new L10N(Sql.ToString(Session["USER_SETTINGS/CULTURE"]));
+			this.Sql                 = Sql                ;
+			this.SqlProcs            = SqlProcs           ;
 			this.SplendidCache       = SplendidCache      ;
+			this.XmlUtil             = XmlUtil            ;
 			this.Modules             = Modules            ;
+			this._logger             = logger             ;
 		}
 
 // 12/16/2021 Paul.  Don't need ASP.Net UI code in React Client. 
@@ -195,7 +199,6 @@ namespace SplendidCRM
 			{
 				// 11/03/2021 Paul.  Utils calls may come from REST API and therefore will not have L10n in Current.Items. 
 				//L10N L10n = HttpContext.Current.Items["L10n"] as L10N;
-				//L10N L10n = new L10N(Application["USER_SETTINGS/CULTURE"] as string);
 				throw(new Exception(L10n.Term(".LBL_TOO_MANY_RECORDS")));
 			}
 			
@@ -230,7 +233,6 @@ namespace SplendidCRM
 			{
 				// 11/03/2021 Paul.  Utils calls may come from REST API and therefore will not have L10n in Current.Items. 
 				//L10N L10n = HttpContext.Current.Items["L10n"] as L10N;
-				//L10N L10n = new L10N(Application["USER_SETTINGS/CULTURE"] as string);
 				throw(new Exception(L10n.Term(".LBL_TOO_MANY_RECORDS")));
 			}
 			
@@ -285,7 +287,6 @@ namespace SplendidCRM
 					{
 						// 11/03/2021 Paul.  Utils calls may come from REST API and therefore will not have L10n in Current.Items. 
 						//L10N L10n = HttpContext.Current.Items["L10n"] as L10N;
-						//L10N L10n = new L10N(Application["USER_SETTINGS/CULTURE"] as string);
 						throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS")));
 					}
 				}
@@ -360,7 +361,6 @@ namespace SplendidCRM
 					{
 						// 11/03/2021 Paul.  Utils calls may come from REST API and therefore will not have L10n in Current.Items. 
 						//L10N L10n = HttpContext.Current.Items["L10n"] as L10N;
-						//L10N L10n = new L10N(Application["USER_SETTINGS/CULTURE"] as string);
 						throw(new Exception(L10n.Term("ACL.LBL_INSUFFICIENT_ACCESS")));
 					}
 				}
@@ -716,7 +716,7 @@ namespace SplendidCRM
 			return sDISPLAY_NAME;
 		}
 
-		public string MassEmailerSiteURL(HttpApplicationState Application)
+		public string MassEmailerSiteURL()
 		{
 			string sSiteURL = Sql.ToString(Application["CONFIG.site_url"]);
 			if ( Sql.ToString(Application["CONFIG.massemailer_tracking_entities_location_type"]) == "2" && !Sql.IsEmptyString(Application["CONFIG.massemailer_tracking_entities_location"]) )
@@ -780,9 +780,16 @@ namespace SplendidCRM
 		}
 
 		// 02/18/2021 Paul.  Rebuild audit tables in the background. 
-		public void BuildAllAuditTables(object o)
+#pragma warning disable CS1998
+		public async ValueTask BuildAllAuditTables(CancellationToken token)
 		{
-			HttpContext Context = o as HttpContext;
+			BuildAllAuditTables();
+		}
+#pragma warning restore CS1998
+
+		private void BuildAllAuditTables()
+		{
+			_logger.LogInformation("Utils.BuildAllAuditTables Begin");
 			// 12/02/2009 Paul.  Keep the original procedure call so that we will get a compiler error if something changes. 
 			bool bIncreaseTimeout = true;
 			if ( !bIncreaseTimeout )
@@ -825,6 +832,7 @@ namespace SplendidCRM
 					}
 				}
 			}
+			_logger.LogInformation("Utils.BuildAllAuditTables End");
 		}
 
 		public DataTable CheckVersion()
@@ -954,29 +962,19 @@ namespace SplendidCRM
 			return sb.ToString();
 		}
 
-// 12/16/2021 Paul.  Don't need ASP.Net UI code in React Client. 
-#if false
-		// 06/27/2009 Paul.  Add quick function to select a single item in a listbox. 
-		public static void SelectItem(ListBox lst, string sValue)
-		{
-			foreach ( ListItem itm in lst.Items )
-			{
-				if ( String.Compare(itm.Value, sValue, true) == 0 )
-					itm.Selected = true;
-			}
-		}
-
 		// 12/20/2009 Paul.  Use our own encoding so that a space does not get converted to a +. 
 		// 12/20/2009 Paul.  UrlPathEncode converts a space to a %20 whereas UrlEncode converts a space to +. 
 		// http://jeays.net/asp.htm
 		// http://msdn.microsoft.com/en-us/library/system.web.httpserverutility.urlpathencode.aspx
-		public static string ContentDispositionEncode(HttpBrowserCapabilities Browser, string sURL)
+		public static string ContentDispositionEncode(string sURL)
 		{
 			// 01/27/2011 Paul.  Don't use GetFileName as the name may contain reserved directory characters, but expect them to be removed in Utils.ContentDispositionEncode. 
 			sURL = sURL.Replace('\\', '_');
 			sURL = sURL.Replace(':' , '_');
 			// 12/20/2009 Paul.  Make sure that the URL is not null. 
 			sURL = Sql.ToString(sURL);
+			// 04/30/2023 Paul.  This should not be necessary anymore. 
+			/*
 			if ( Browser != null )
 			{
 				if ( Browser.Browser == "IE" )
@@ -984,10 +982,10 @@ namespace SplendidCRM
 					sURL = HttpUtility.UrlPathEncode(sURL);
 				}
 			}
+			*/
 			sURL = "\"" + sURL + "\"";
 			return sURL;
 		}
-#endif
 
 		public static string GenerateVCard(DataRow row)
 		{
@@ -1647,13 +1645,15 @@ namespace SplendidCRM
 		private DbProviderFactories  DbProviderFactories = new DbProviderFactories();
 		private HttpApplicationState Application = new HttpApplicationState();
 		private HttpSessionState     Session            ;
+		private Security             Security           ;
 		private Sql                  Sql                ;
 		private L10N                 L10n               ;
-		private Security             Security           ;
 		private Utils                Utils              ;
 		private SplendidCache        SplendidCache      ;
 		private SplendidError        SplendidError      ;
 		private Crm.Modules          Modules            ;
+		private IBackgroundTaskQueue taskQueue          ;
+
 		private Guid        gMODIFIED_USER_ID;
 		private int         nACLACCESS       ;
 		private string      ModuleName       ;
@@ -1662,16 +1662,17 @@ namespace SplendidCRM
 
 		public string LastError { get; set; }
 
-		public ArchiveUtils(HttpSessionState Session, Sql Sql, Security Security, Utils Utils, SplendidCache SplendidCache, SplendidError SplendidError, Crm.Modules Modules)
+		public ArchiveUtils(HttpSessionState Session, Security Security, Sql Sql, SqlProcs SqlProcs, Utils Utils, SplendidCache SplendidCache, SplendidError SplendidError, Crm.Modules Modules, IBackgroundTaskQueue taskQueue)
 		{
-			this.L10n                = new L10N(Sql.ToString(Session["USER_LANG"]));
-			this.Sql                 = Sql                ;
 			this.Session             = Session            ;
 			this.Security            = Security           ;
+			this.L10n                = new L10N(Sql.ToString(Session["USER_SETTINGS/CULTURE"]));
+			this.Sql                 = Sql                ;
 			this.Utils               = Utils              ;
 			this.SplendidCache       = SplendidCache      ;
 			this.SplendidError       = SplendidError      ;
 			this.Modules             = Modules            ;
+			this.taskQueue           = taskQueue          ;
 
 			this.LastError         = String.Empty;
 			this.gMODIFIED_USER_ID = Sql.ToGuid(Session["USER_ID"]);
@@ -1711,8 +1712,7 @@ namespace SplendidCRM
 				bool bIncludeActivities = IncludeActivities(sModuleName);
 				if ( arrID.Length > this.nMaxBulkCount || (arrID.Length > 10 && bIncludeActivities) )
 				{
-					System.Threading.Thread t = new System.Threading.Thread(this.MoveDataInternal);
-					t.Start();
+					taskQueue.QueueBackgroundWorkItemAsync(this.MoveDataInternal);
 					this.LastError = L10n.Term(".LBL_BACKGROUND_OPERATION");
 				}
 				else
@@ -1758,6 +1758,13 @@ namespace SplendidCRM
 			}
 			return bIncludeActivities;
 		}
+
+#pragma warning disable CS1998
+		private async ValueTask MoveDataInternal(CancellationToken token)
+		{
+			MoveDataInternal();
+		}
+#pragma warning restore CS1998
 
 		private void MoveDataInternal()
 		{
@@ -1850,8 +1857,7 @@ namespace SplendidCRM
 				bool bIncludeActivities = IncludeActivities(sModuleName);
 				if ( arrID.Length > this.nMaxBulkCount || (arrID.Length > 10 && bIncludeActivities) )
 				{
-					System.Threading.Thread t = new System.Threading.Thread(this.RecoverDataInternal);
-					t.Start();
+					taskQueue.QueueBackgroundWorkItemAsync(this.RecoverDataInternal);
 					this.LastError = L10n.Term(".LBL_BACKGROUND_OPERATION");
 				}
 				else
@@ -1866,6 +1872,13 @@ namespace SplendidCRM
 			SplendidCache.ClearArchiveViewExists();
 			return this.LastError;
 		}
+
+#pragma warning disable CS1998
+		private async ValueTask RecoverDataInternal(CancellationToken token)
+		{
+			RecoverDataInternal();
+		}
+#pragma warning restore CS1998
 
 		public void RecoverDataInternal()
 		{
@@ -1931,5 +1944,4 @@ namespace SplendidCRM
 		}
 	}
 }
-
 
